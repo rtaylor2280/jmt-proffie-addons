@@ -3,6 +3,7 @@
 // SingleValue input, returning 32768 when the battery is fully charged and 0 otherwise.
 // It allows styles to react dynamically to a “charge complete” state, such as
 // triggering visual indicators or transitions based on charge status.
+// v1.0.0
 #ifndef FUNCTIONS_CHARGE_FULL_PROP_H
 #define FUNCTIONS_CHARGE_FULL_PROP_H
 

@@ -1,10 +1,19 @@
 {
-  "version": "1.0.0",
+  "version": "1.0.2",
   "minProffieVersion": "7.14",
   "testedUpTo": "8.10",
   "files": [
-    { "path": "common/charge_state.h",           "sha256": "d742adddc2624867d124609b40d2bec2ce6449e1e805f5a41b52ba7ba9181c7a" },
-    { "path": "functions/charge_full_prop.h",    "sha256": "8670539d5cf0c45a2e24ba3cc068698c98956f678eceb14fa24115194d2fb514" },
-    { "path": "props/jmt_fett263_wrapper.h",     "sha256": "a0779ae718547568384dc58da89b4c74a7630ef4e81994ea7a48d491a0b5e360" }
+    {
+      "path": "common/charge_state.h",
+      "sha256": "89662920be81ac23b834540d59764aa64a08db35c1d8f15e6f47634dfea9614e"
+    },
+    {
+      "path": "functions/charge_full_prop.h",
+      "sha256": "2ab13f09af7d3923747d592db445ce65b11e00f1acde6fbe3eba52ff8b6e3eee"
+    },
+    {
+      "path": "props/jmt_fett263_wrapper.h",
+      "sha256": "a62a9805965321b37d9da58119e7a793639f6ef6d62d36f800fac2f0c934996b"
+    }
   ]
 }
