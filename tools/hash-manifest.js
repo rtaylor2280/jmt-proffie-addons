@@ -27,7 +27,8 @@ const REPO_ROOT = path.resolve(__dirname, '..');
 const MANIFEST  = path.join(REPO_ROOT, 'manifest.json');
 
 function sha256(filePath) {
-  return crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex');
+  const content = fs.readFileSync(filePath, 'utf8').replace(/\r\n/g, '\n');
+  return crypto.createHash('sha256').update(content, 'utf8').digest('hex');
 }
 
 function scanRepo(dir, base) {
