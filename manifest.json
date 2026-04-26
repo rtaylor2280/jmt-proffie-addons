@@ -3,8 +3,8 @@
   "minProffieVersion": "7.14",
   "testedUpTo": "8.10",
   "files": [
-    { "path": "common/charge_state.h" },
-    { "path": "functions/charge_full_prop.h" },
-    { "path": "props/jmt_fett263_wrapper.h" }
+    { "path": "common/charge_state.h",           "sha256": "d742adddc2624867d124609b40d2bec2ce6449e1e805f5a41b52ba7ba9181c7a" },
+    { "path": "functions/charge_full_prop.h",    "sha256": "8670539d5cf0c45a2e24ba3cc068698c98956f678eceb14fa24115194d2fb514" },
+    { "path": "props/jmt_fett263_wrapper.h",     "sha256": "a0779ae718547568384dc58da89b4c74a7630ef4e81994ea7a48d491a0b5e360" }
   ]
 }
