@@ -3,7 +3,7 @@
 // to indicate when a charging session has reached a fully charged state.
 // It allows different parts of ProffieOS (styles, props, and logic handlers)
 // to reference a consistent “charge complete” condition during runtime.
-// v1.0.01
+// v1.0.0
 #ifndef CHARGE_STATE_H
 #define CHARGE_STATE_H
 
