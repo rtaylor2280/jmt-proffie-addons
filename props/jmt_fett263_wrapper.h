@@ -15,7 +15,7 @@
 // manual adjustment or debugging. Use at your own discretion when integrating into
 // production builds.
 // Updated for ProffieOS 8.1 compatibility
-// v2.0.1
+// v2.0.2
 #ifndef PROPS_JMT_FETT263_WRAPPER_H
 #define PROPS_JMT_FETT263_WRAPPER_H
 
@@ -818,6 +818,14 @@ protected:
 
 		if (present == last_present) return;
 		last_present = present;
+
+		#ifdef JMT_NO_BLADE_VALUE
+			// Standard ProffieOS BladeID emits its own blade in/out audio via
+			// the preset switch. When using the JMT_NO_BLADE_VALUE override the
+			// switch path may not trigger that audio (e.g. on Proffieboard V2),
+			// so play the in/out sound here to keep behavior consistent.
+			sound_library_.Play(present ? "bladein.wav" : "bladeout.wav");
+		#endif
 
 		#ifndef JMT_DISABLE_FAVORITES
 			AbortPendingFavoriteReset();

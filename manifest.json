@@ -1,5 +1,5 @@
 {
-  "version": "1.0.6",
+  "version": "1.0.7",
   "minProffieVersion": "7.14",
   "testedUpTo": "8.10",
   "files": [
@@ -13,7 +13,7 @@
     },
     {
       "path": "props/jmt_fett263_wrapper.h",
-      "sha256": "e3b4a0d443c5223cfe400dee008c0e7a00cd8557fd3ca77ff37762bb7e6f69a0"
+      "sha256": "48ff2975d618a2a4b9d8621ca44d3338fb00c8f86778e61d084c2c66ea205074"
     }
   ]
 }
