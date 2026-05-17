@@ -15,7 +15,7 @@
 // manual adjustment or debugging. Use at your own discretion when integrating into
 // production builds.
 // Updated for ProffieOS 8.1 compatibility
-// v2.0.1
+// v2.0.2
 // test of dev
 #ifndef PROPS_JMT_FETT263_WRAPPER_H
 #define PROPS_JMT_FETT263_WRAPPER_H
@@ -46,6 +46,10 @@
 
 #if defined(BLADE_DETECT_PIN) && defined(JMT_BLADE_DETECT)
   #error "Cannot use both BLADE_DETECT_PIN and JMT_BLADE_DETECT. Choose one blade detect method."
+#endif
+
+#if defined(JMT_NO_BLADE_VALUE) && !defined(JMT_BLADE_DETECT)
+#error "JMT_NO_BLADE_VALUE requires JMT_BLADE_DETECT to be defined."
 #endif
 
 #if defined(JMT_CHARGE_LOCKOUT) && !defined(CHARGE_DETECT_PIN)
@@ -786,10 +790,19 @@ protected:
 
 // ---------- Helpers: JMT blade detect ---------
 #ifdef JMT_BLADE_DETECT
+	// Detects the "no blade" state by comparing the active BladeConfig's ohm
+	// value against a sentinel. Defaults to ProffieOS NO_BLADE; override with
+	// JMT_NO_BLADE_VALUE when the config uses a custom sentinel ohm reading.
+	// Note: a matching BladeConfig entry must exist in the user's array or
+	// this will always return false and "no blade" will never be detected.
 	bool CurrentBladeConfigIsNoBlade() const {
 		extern BladeConfig* current_config;
 		if (!current_config) return false;
+#ifdef JMT_NO_BLADE_VALUE
+		return current_config->ohm == JMT_NO_BLADE_VALUE;
+#else
 		return current_config->ohm == NO_BLADE;
+#endif
 	}
 
 	void HandleJmtBladeDetect() {
