@@ -1,11 +1,15 @@
 {
-  "version": "1.0.8",
+  "version": "1.1.0",
   "minProffieVersion": "7.14",
   "testedUpTo": "8.10",
   "files": [
     {
       "path": "common/charge_state.h",
       "sha256": "8c20f9f1dd87c88b62d214c6af4dfc8d0cdb94ee4594ce2184bcef0c348b0308"
+    },
+    {
+      "path": "common/jmt_dev_temp.h",
+      "sha256": "432b96904f4c90221df3c2cd909f831d876b228a24e5980dd4378dfa4ea49f24"
     },
     {
       "path": "functions/charge_full_prop.h",
