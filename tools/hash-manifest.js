@@ -18,7 +18,7 @@ const crypto = require('crypto');
 const INCLUDE_EXTS = new Set(['.h', '.cpp', '.c', '.cc', '.ino']);
 
 // Top-level dirs/files to never scan (relative to repo root)
-const EXCLUDE_DIRS  = new Set(['tools', '.git', 'node_modules']);
+const EXCLUDE_DIRS  = new Set(['tools', '.git', 'node_modules', 'local']);
 const EXCLUDE_FILES = new Set(['manifest.json']);
 
 // ── Helpers ────────────────────────────────────────────

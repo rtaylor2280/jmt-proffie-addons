@@ -15,7 +15,7 @@
 // manual adjustment or debugging. Use at your own discretion when integrating into
 // production builds.
 // Updated for ProffieOS 8.1 compatibility
-// v2.0.2
+// v2.0.3
 #ifndef PROPS_JMT_FETT263_WRAPPER_H
 #define PROPS_JMT_FETT263_WRAPPER_H
 
@@ -47,6 +47,10 @@
   #error "Cannot use both BLADE_DETECT_PIN and JMT_BLADE_DETECT. Choose one blade detect method."
 #endif
 
+// JMT_NO_BLADE_VALUE: back-port of the OS 8+ NO_BLADE_ID_RANGE mechanism for
+// configs running on older ProffieOS (7.x). On OS 8 and later, prefer the
+// native NO_BLADE_ID_RANGE macro which transparently re-maps in-range BladeID
+// readings into the standard NO_BLADE bucket.
 #if defined(JMT_NO_BLADE_VALUE) && !defined(JMT_BLADE_DETECT)
 #error "JMT_NO_BLADE_VALUE requires JMT_BLADE_DETECT to be defined."
 #endif
@@ -804,6 +808,22 @@ protected:
 #endif
 	}
 
+#ifdef JMT_NO_BLADE_VALUE
+	// PollScanId in prop_base.h decides which effect to fire after a BladeID
+	// scan changes current_config by comparing GetNoBladeLevelBefore() against
+	// the hardcoded `current_config->ohm / NO_BLADE` (NO_BLADE is 1e9). For a
+	// custom sentinel ohm below NO_BLADE, both sides of that compare come out
+	// to 0, so the equality branch fires DoNewFont() and the user hears
+	// font.wav instead of bladein/bladeout. Returning 1 when the previous
+	// config was the JMT sentinel and -1 otherwise brackets 0 on both sides:
+	//   pull blade:   before(-1) < after(0) -> EFFECT_BLADEOUT
+	//   insert blade: before( 1) > after(0) -> EFFECT_BLADEIN
+	int GetNoBladeLevelBefore() override {
+		if (!current_config) return 0;
+		return (current_config->ohm == JMT_NO_BLADE_VALUE) ? 1 : -1;
+	}
+#endif
+
 	void HandleJmtBladeDetect() {
 		static bool last_present = false;
 		static bool initialized = false;
@@ -818,14 +838,6 @@ protected:
 
 		if (present == last_present) return;
 		last_present = present;
-
-		#ifdef JMT_NO_BLADE_VALUE
-			// Standard ProffieOS BladeID emits its own blade in/out audio via
-			// the preset switch. When using the JMT_NO_BLADE_VALUE override the
-			// switch path may not trigger that audio (e.g. on Proffieboard V2),
-			// so play the in/out sound here to keep behavior consistent.
-			sound_library_.Play(present ? "bladein.wav" : "bladeout.wav");
-		#endif
 
 		#ifndef JMT_DISABLE_FAVORITES
 			AbortPendingFavoriteReset();
