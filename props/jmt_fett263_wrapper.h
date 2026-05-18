@@ -15,7 +15,7 @@
 // manual adjustment or debugging. Use at your own discretion when integrating into
 // production builds.
 // Updated for ProffieOS 8.1 compatibility
-// v2.2.0
+// v2.2.1
 #ifndef PROPS_JMT_FETT263_WRAPPER_H
 #define PROPS_JMT_FETT263_WRAPPER_H
 
@@ -231,10 +231,6 @@ void Loop() override {
 		#else
 			HandleJmtBladeDetect();
 		#endif
-	#endif
-
-	#ifdef JMT_CHASSIS_DETECT_RANGE
-		HandleJmtChassisRange();
 	#endif
 
 	#ifdef JMT_DEBUG_GYRO
