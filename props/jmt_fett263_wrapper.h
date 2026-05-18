@@ -15,7 +15,7 @@
 // manual adjustment or debugging. Use at your own discretion when integrating into
 // production builds.
 // Updated for ProffieOS 8.1 compatibility
-// v2.1.0
+// v2.2.0
 #ifndef PROPS_JMT_FETT263_WRAPPER_H
 #define PROPS_JMT_FETT263_WRAPPER_H
 
@@ -55,16 +55,45 @@
 #error "JMT_NO_BLADE_VALUE requires JMT_BLADE_DETECT to be defined."
 #endif
 
-// JMT_CHASSIS_DETECT_RANGE (POC): chassis detection driven by the BladeID
-// resistance reading as an alternative to a physical CHASSIS_DETECT_PIN.
-// Defined as min,max -- when the raw BladeID reading falls inside that range
-// the wrapper treats the chassis as OUT and emits a short distinct beep on
-// each transition. Independent of CHASSIS_DETECT_PIN; both may be defined at
-// once during evaluation.
+// JMT_CHASSIS_DETECT_RANGE: chassis detection driven by the BladeID resistance
+// reading, as an alternative to a physical CHASSIS_DETECT_PIN. Defined as
+// min,max -- when the raw BladeID reading falls inside that range the wrapper
+// treats the chassis as OUT. Same downstream behavior as the pin path: sets
+// chassis_in_, plays chassisin/out.wav, fires JMT_CHASSIS_WAKE, gates the
+// roll/flick preset gestures, etc.
 //   Latency = BLADE_ID_SCAN_MILLIS (scan-driven, not edge-triggered).
-//   Range must not overlap NO_BLADE_ID_RANGE or any BladeConfig ohm entry.
-#if defined(JMT_CHASSIS_DETECT_RANGE) && !defined(JMT_BLADE_DETECT)
-#error "JMT_CHASSIS_DETECT_RANGE requires JMT_BLADE_DETECT to be defined."
+//   Range must not overlap any BladeConfig ohm entry. It MAY overlap
+//   NO_BLADE_ID_RANGE -- the wrapper recovers the raw reading by subtracting
+//   NO_BLADE before comparison.
+#if defined(CHASSIS_DETECT_PIN) && defined(JMT_CHASSIS_DETECT_RANGE)
+#error "CHASSIS_DETECT_PIN and JMT_CHASSIS_DETECT_RANGE are mutually exclusive -- pick one chassis detect method."
+#endif
+
+// Internal umbrella: defined when EITHER chassis detect method is configured.
+// All downstream consumers (Event2 swing block, roll/flick presets, etc.) gate
+// on this so they work identically for both backends.
+#if defined(CHASSIS_DETECT_PIN) || defined(JMT_CHASSIS_DETECT_RANGE)
+#define JMT_HAS_CHASSIS_DETECT
+#endif
+
+// Shared prerequisites for any wrapper feature that consumes the OS BladeID
+// scan (JMT_BLADE_DETECT, JMT_CHASSIS_DETECT_RANGE).
+#if defined(JMT_BLADE_DETECT) || defined(JMT_CHASSIS_DETECT_RANGE)
+  #ifndef ENABLE_POWER_FOR_ID
+    #error "JMT BladeID-based features (JMT_BLADE_DETECT / JMT_CHASSIS_DETECT_RANGE) require ENABLE_POWER_FOR_ID to be defined."
+  #endif
+  #ifndef BLADE_ID_SCAN_MILLIS
+    #error "JMT BladeID-based features require BLADE_ID_SCAN_MILLIS to be defined."
+  #endif
+  #ifndef BLADE_ID_TIMES
+    #error "JMT BladeID-based features require BLADE_ID_TIMES to be defined."
+  #endif
+  #if BLADE_ID_SCAN_MILLIS <= 0
+    #error "BLADE_ID_SCAN_MILLIS must be greater than 0."
+  #endif
+  #if BLADE_ID_TIMES <= 0
+    #error "BLADE_ID_TIMES must be greater than 0."
+  #endif
 #endif
 
 #if defined(JMT_CHARGE_LOCKOUT) && !defined(CHARGE_DETECT_PIN)
@@ -83,29 +112,8 @@
 #warning "JMT_CHARGE_LOCKOUT without FETT263_SAVE_GESTURE_OFF will not preserve full prior gesture state."
 #endif
 
-#ifdef JMT_BLADE_DETECT
-
-  #ifndef ENABLE_POWER_FOR_ID
-    #error "JMT_BLADE_DETECT requires ENABLE_POWER_FOR_ID to be defined."
-  #endif
-
-  #ifndef BLADE_ID_SCAN_MILLIS
-    #error "JMT_BLADE_DETECT requires BLADE_ID_SCAN_MILLIS to be defined."
-  #endif
-
-  #ifndef BLADE_ID_TIMES
-    #error "JMT_BLADE_DETECT requires BLADE_ID_TIMES to be defined."
-  #endif
-
-  #if BLADE_ID_SCAN_MILLIS <= 0
-    #error "BLADE_ID_SCAN_MILLIS must be greater than 0 for JMT_BLADE_DETECT."
-  #endif
-
-  #if BLADE_ID_TIMES <= 0
-    #error "BLADE_ID_TIMES must be greater than 0 for JMT_BLADE_DETECT."
-  #endif
-
-#endif
+// (BladeID prerequisites for JMT_BLADE_DETECT are checked in the shared
+// JMT BladeID-based features block above.)
 
 // -----------------------------------------------------------------------------
 // File-scope configuration and helpers
@@ -157,16 +165,17 @@ void Setup() override {
 			// or battery via a resistor divider). Pin must be held LOW when the
 			// chassis is absent using a pulldown (internal or external).
 			pinMode(CHASSIS_DETECT_PIN, INPUT);
-			chassis_in_ = (digitalRead(CHASSIS_DETECT_PIN) == HIGH);
+			UpdateChassisState(digitalRead(CHASSIS_DETECT_PIN) == HIGH);
 		#else
 			// Active LOW chassis detect.
 			// Pin is normally pulled HIGH internally and is shorted to board GND
 			// when the chassis is present.
 			pinMode(CHASSIS_DETECT_PIN, INPUT_PULLUP);
-			chassis_in_ = (digitalRead(CHASSIS_DETECT_PIN) == LOW);
+			UpdateChassisState(digitalRead(CHASSIS_DETECT_PIN) == LOW);
 		#endif
 
 	#endif
+	// Range backend has no Setup -- first BladeID scan establishes chassis_in_.
 
 	#ifdef CHARGE_DETECT_PIN
 		pinMode(CHARGE_DETECT_PIN, INPUT_PULLUP);
@@ -181,12 +190,18 @@ void Loop() override {
     SaberFett263Buttons::Loop();
 
 	#ifdef CHASSIS_DETECT_PIN
-			HandleChassisDetect();
-		
+		HandleChassisDetect();
+	#endif
+
+	#ifdef JMT_CHASSIS_DETECT_RANGE
+		HandleJmtChassisRange();
+	#endif
+
+	#ifdef JMT_HAS_CHASSIS_DETECT
 		#ifdef JMT_ROLL_PRESETS
 			HandleRollPresetGesture();
 		#endif
-		
+
 		#ifdef JMT_FLICK_PRESETS
 			HandlePosePresetFlick();
 		#endif
@@ -242,7 +257,7 @@ void Loop() override {
 // ---------- Event2 ------------------------------------------------
 bool Event2(enum BUTTON button, EVENT event, uint32_t modifiers) override {
 
-	#ifdef CHASSIS_DETECT_PIN
+	#ifdef JMT_HAS_CHASSIS_DETECT
 		// If chassis is OUT, block swing-based ignition while OFF
 		if (!chassis_in_) {
 			if (EVENTID(button, event, modifiers) ==
@@ -603,10 +618,36 @@ protected:
 #endif  // CHARGE_DETECT_PIN
 
 // ---------- Helpers: chassis detect -------------------------------
-#ifdef CHASSIS_DETECT_PIN
-	// Chassis detect state
+#ifdef JMT_HAS_CHASSIS_DETECT
+	// Unified chassis state. chassis_in_ is the single source of truth used
+	// downstream (Event2 swing block, gesture handlers, etc.); the two
+	// detection backends (CHASSIS_DETECT_PIN, JMT_CHASSIS_DETECT_RANGE) both
+	// feed UpdateChassisState() with their current best read of chassis
+	// presence and the shared state machine here handles transitions.
 	bool chassis_in_ = false;
-  
+	bool chassis_state_initialized_ = false;
+
+	void UpdateChassisState(bool present_now) {
+		if (!chassis_state_initialized_) {
+			chassis_in_ = present_now;
+			chassis_state_initialized_ = true;
+			return;  // silent first call -- no sound on boot/init
+		}
+		if (chassis_in_ == present_now) return;
+		chassis_in_ = present_now;
+
+		sound_library_.Play(chassis_in_ ? "chassisin.wav" : "chassisout.wav");
+
+		#ifndef JMT_DISABLE_FAVORITES
+			AbortPendingFavoriteReset();
+		#endif
+
+		#ifdef JMT_CHASSIS_WAKE
+			if (!SaberBase::MotionRequested())
+				SaberBase::RequestMotion();
+		#endif
+	}
+
 	#ifdef JMT_ROLL_PRESETS
 		bool  roll_preset_armed_ = false;
 		float roll_preset_start_angle_ = 0.0f;
@@ -642,8 +683,11 @@ protected:
 		}
 	#endif
   
+	// Pin-backend chassis debouncer. Reads the pin, applies a 30 ms debounce,
+	// and reports stable transitions to UpdateChassisState (which handles the
+	// sound, favorites abort, and wake hooks shared with the range backend).
+	#ifdef CHASSIS_DETECT_PIN
 	void HandleChassisDetect() {
-		// Debounce for chassis detect
 		static bool		chassis_last_raw	= false;	// last instantaneous read
 		static bool		chassis_stable		= false;	// debounced state
 		static uint32_t	chassis_last_change	= 0;		// when raw state last flipped
@@ -669,20 +713,10 @@ protected:
 			(now - chassis_last_change) > DEBOUNCE_MS) {
 
 			chassis_stable = chassis_raw;
-			chassis_in_	= chassis_stable;
-
-			sound_library_.Play(chassis_in_ ? "chassisin.wav" : "chassisout.wav");
-			
-			#ifndef JMT_DISABLE_FAVORITES
-				AbortPendingFavoriteReset();
-			#endif
-
-			#ifdef JMT_CHASSIS_WAKE
-				if (!SaberBase::MotionRequested())
-					SaberBase::RequestMotion();
-			#endif
+			UpdateChassisState(chassis_stable);
 		}
 	}
+	#endif  // CHASSIS_DETECT_PIN
 
 	#ifdef JMT_ROLL_PRESETS
 		// Roll-to-change-preset, only when blade OFF and chassis OUT
@@ -804,8 +838,8 @@ protected:
 			}
 		}
 	#endif  // JMT_FLICK_PRESETS
-	
-#endif	// CHASSIS_DETECT_PIN
+
+#endif	// JMT_HAS_CHASSIS_DETECT
 
 // ---------- Helpers: JMT blade detect ---------
 #ifdef JMT_BLADE_DETECT
@@ -837,42 +871,6 @@ protected:
 	int GetNoBladeLevelBefore() override {
 		if (!current_config) return 0;
 		return (current_config->ohm == JMT_NO_BLADE_VALUE) ? 1 : -1;
-	}
-#endif
-
-#ifdef JMT_CHASSIS_DETECT_RANGE
-	// Hook PropBase::id() (already virtual, already overridden by Fett263) so
-	// every BladeID scan also updates our chassis-out state. SaberFett263Buttons::id
-	// returns the post-BLADE_ID_CLASS-chain value, so if NO_BLADE_ID_RANGE is
-	// active and bumped the reading we recover the raw ohm by subtracting
-	// NO_BLADE before the range compare.
-	float id(bool announce = false) override {
-		float val = SaberFett263Buttons::id(announce);
-		float raw = (val >= NO_BLADE) ? val - NO_BLADE : val;
-		chassis_range_out_ = IsInChassisOutRange(raw);
-		return val;
-	}
-
-	static inline bool IsInChassisOutRange(float raw) {
-		constexpr int range_vals[] = {JMT_CHASSIS_DETECT_RANGE};
-		return raw >= range_vals[0] && raw <= range_vals[1];
-	}
-
-	bool chassis_range_out_ = false;
-	bool last_chassis_range_out_ = false;
-	bool chassis_range_initialized_ = false;
-
-	void HandleJmtChassisRange() {
-		if (!chassis_range_initialized_) {
-			last_chassis_range_out_ = chassis_range_out_;
-			chassis_range_initialized_ = true;
-			return;
-		}
-		if (chassis_range_out_ == last_chassis_range_out_) return;
-		last_chassis_range_out_ = chassis_range_out_;
-		// POC feedback: short distinct beep so the range path is audible
-		// independent of CHASSIS_DETECT_PIN sounds. Out = low tone, In = high.
-		Beeps(0.04f, chassis_range_out_ ? 1500.0f : 2500.0f);
 	}
 #endif
 
@@ -911,6 +909,35 @@ protected:
 		}
 	}
 #endif  // JMT_BLADE_DETECT
+
+// ---------- Helpers: JMT chassis-detect-range backend ---------
+#ifdef JMT_CHASSIS_DETECT_RANGE
+	// Hook PropBase::id() (virtual, already overridden by Fett263) so every
+	// BladeID scan also refreshes our chassis-range read. id() returns the
+	// post-BLADE_ID_CLASS-chain value, so if NO_BLADE_ID_RANGE is active and
+	// bumped the reading we recover the raw ohm by subtracting NO_BLADE
+	// before the range compare.
+	float id(bool announce = false) override {
+		float val = SaberFett263Buttons::id(announce);
+		float raw = (val >= NO_BLADE) ? val - NO_BLADE : val;
+		chassis_range_out_ = IsInChassisOutRange(raw);
+		return val;
+	}
+
+	static inline bool IsInChassisOutRange(float raw) {
+		constexpr int range_vals[] = {JMT_CHASSIS_DETECT_RANGE};
+		return raw >= range_vals[0] && raw <= range_vals[1];
+	}
+
+	bool chassis_range_out_ = false;
+
+	// Called once per Loop(). Pushes the current chassis-range read into the
+	// shared UpdateChassisState machine, which handles transition detection,
+	// sound, favorites abort, and JMT_CHASSIS_WAKE -- same as the pin path.
+	void HandleJmtChassisRange() {
+		UpdateChassisState(!chassis_range_out_);
+	}
+#endif  // JMT_CHASSIS_DETECT_RANGE
 
 // ---------- Favorites Helpers --------------------
 #ifndef JMT_DISABLE_FAVORITES
