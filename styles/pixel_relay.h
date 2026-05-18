@@ -3,17 +3,20 @@
 // Two-pixel "relay race" accent effect: pixel 0 flashes COLOR_A for COUNT_A
 // flashes while pixel 1 stays dark, then pixel 1 flashes COLOR_B for COUNT_B
 // flashes while pixel 0 stays dark. The cycle repeats. Both pixels share a
-// single flash heartbeat (FLASH_PERIOD_MS), so the off pixel is simply
-// transparent while it is not its turn.
+// single flash heartbeat (FLASH_PERIOD_MS) so the off pixel is simply dark
+// while it is not its turn.
 //
 // Designed for the Luke ROTJ cave-scene arrow accent on a 2-LED accent strip,
 // but works as a general-purpose alternating two-pixel flasher.
 //
-// Off pixels return RGBA_um_nod::Transparent() so PixelRelay composes cleanly
-// inside Layers<>. Use it as a top-level StylePtr<> for the classic effect, or
-// wrap with Layers<Black, PixelRelay<...>> to force a solid black background.
+// Provided in two forms (matching the stock ProffieOS LocalizedClash pattern):
+//   PixelRelayL  - layer form, returns RGBA_um_nod (transparent for off pixels).
+//                  Compose it inside Layers<some_base_color, PixelRelayL<...>>
+//                  when you want a base color to show through off pixels.
+//   PixelRelay   - top-level form, pre-wrapped as Layers<Black, PixelRelayL<...>>.
+//                  Drops directly into StylePtr<>, off pixels render solid black.
 //
-// v1.0.0
+// v1.0.1
 
 #ifndef STYLES_PIXEL_RELAY_H
 #define STYLES_PIXEL_RELAY_H
@@ -25,7 +28,7 @@
 // COUNT_B: int - number of flashes on pixel 1 before handing back to pixel 0
 // FLASH_PERIOD_MS: int - full on+off duration of a single flash, in ms
 //                  (default 333 = ~3 Hz). Applied to both phases.
-// Return value: LAYER
+// Return value: COLOR (for PixelRelay) or LAYER (for PixelRelayL)
 //
 // Example (Luke ROTJ cave scene, 2-pixel arrow accent, recolorable via the
 // preset editor's BASE_COLOR_ARG):
@@ -35,11 +38,11 @@
 //   >>()
 
 template<class COLOR_A, int COUNT_A, class COLOR_B, int COUNT_B, int FLASH_PERIOD_MS = 333>
-class PixelRelay {
+class PixelRelayL {
 public:
-  static_assert(COUNT_A > 0, "PixelRelay COUNT_A must be greater than 0");
-  static_assert(COUNT_B > 0, "PixelRelay COUNT_B must be greater than 0");
-  static_assert(FLASH_PERIOD_MS > 0, "PixelRelay FLASH_PERIOD_MS must be greater than 0");
+  static_assert(COUNT_A > 0, "PixelRelayL COUNT_A must be greater than 0");
+  static_assert(COUNT_B > 0, "PixelRelayL COUNT_B must be greater than 0");
+  static_assert(FLASH_PERIOD_MS > 0, "PixelRelayL FLASH_PERIOD_MS must be greater than 0");
 
   LayerRunResult run(BladeBase* blade) {
     RunLayer(&a_, blade);
@@ -71,5 +74,8 @@ public:
     return ret;
   }
 };
+
+template<class COLOR_A, int COUNT_A, class COLOR_B, int COUNT_B, int FLASH_PERIOD_MS = 333>
+using PixelRelay = Layers<Black, PixelRelayL<COLOR_A, COUNT_A, COLOR_B, COUNT_B, FLASH_PERIOD_MS>>;
 
 #endif  // STYLES_PIXEL_RELAY_H
