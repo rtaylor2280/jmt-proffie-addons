@@ -15,7 +15,7 @@
 // manual adjustment or debugging. Use at your own discretion when integrating into
 // production builds.
 // Updated for ProffieOS 8.1 compatibility
-// v2.0.3
+// v2.1.0
 #ifndef PROPS_JMT_FETT263_WRAPPER_H
 #define PROPS_JMT_FETT263_WRAPPER_H
 
@@ -53,6 +53,18 @@
 // readings into the standard NO_BLADE bucket.
 #if defined(JMT_NO_BLADE_VALUE) && !defined(JMT_BLADE_DETECT)
 #error "JMT_NO_BLADE_VALUE requires JMT_BLADE_DETECT to be defined."
+#endif
+
+// JMT_CHASSIS_DETECT_RANGE (POC): chassis detection driven by the BladeID
+// resistance reading as an alternative to a physical CHASSIS_DETECT_PIN.
+// Defined as min,max -- when the raw BladeID reading falls inside that range
+// the wrapper treats the chassis as OUT and emits a short distinct beep on
+// each transition. Independent of CHASSIS_DETECT_PIN; both may be defined at
+// once during evaluation.
+//   Latency = BLADE_ID_SCAN_MILLIS (scan-driven, not edge-triggered).
+//   Range must not overlap NO_BLADE_ID_RANGE or any BladeConfig ohm entry.
+#if defined(JMT_CHASSIS_DETECT_RANGE) && !defined(JMT_BLADE_DETECT)
+#error "JMT_CHASSIS_DETECT_RANGE requires JMT_BLADE_DETECT to be defined."
 #endif
 
 #if defined(JMT_CHARGE_LOCKOUT) && !defined(CHARGE_DETECT_PIN)
@@ -204,6 +216,10 @@ void Loop() override {
 		#else
 			HandleJmtBladeDetect();
 		#endif
+	#endif
+
+	#ifdef JMT_CHASSIS_DETECT_RANGE
+		HandleJmtChassisRange();
 	#endif
 
 	#ifdef JMT_DEBUG_GYRO
@@ -821,6 +837,42 @@ protected:
 	int GetNoBladeLevelBefore() override {
 		if (!current_config) return 0;
 		return (current_config->ohm == JMT_NO_BLADE_VALUE) ? 1 : -1;
+	}
+#endif
+
+#ifdef JMT_CHASSIS_DETECT_RANGE
+	// Hook PropBase::id() (already virtual, already overridden by Fett263) so
+	// every BladeID scan also updates our chassis-out state. SaberFett263Buttons::id
+	// returns the post-BLADE_ID_CLASS-chain value, so if NO_BLADE_ID_RANGE is
+	// active and bumped the reading we recover the raw ohm by subtracting
+	// NO_BLADE before the range compare.
+	float id(bool announce = false) override {
+		float val = SaberFett263Buttons::id(announce);
+		float raw = (val >= NO_BLADE) ? val - NO_BLADE : val;
+		chassis_range_out_ = IsInChassisOutRange(raw);
+		return val;
+	}
+
+	static inline bool IsInChassisOutRange(float raw) {
+		constexpr int range_vals[] = {JMT_CHASSIS_DETECT_RANGE};
+		return raw >= range_vals[0] && raw <= range_vals[1];
+	}
+
+	bool chassis_range_out_ = false;
+	bool last_chassis_range_out_ = false;
+	bool chassis_range_initialized_ = false;
+
+	void HandleJmtChassisRange() {
+		if (!chassis_range_initialized_) {
+			last_chassis_range_out_ = chassis_range_out_;
+			chassis_range_initialized_ = true;
+			return;
+		}
+		if (chassis_range_out_ == last_chassis_range_out_) return;
+		last_chassis_range_out_ = chassis_range_out_;
+		// POC feedback: short distinct beep so the range path is audible
+		// independent of CHASSIS_DETECT_PIN sounds. Out = low tone, In = high.
+		Beeps(0.04f, chassis_range_out_ ? 1500.0f : 2500.0f);
 	}
 #endif
 
