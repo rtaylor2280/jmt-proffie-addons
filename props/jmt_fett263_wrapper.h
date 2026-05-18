@@ -15,7 +15,7 @@
 // manual adjustment or debugging. Use at your own discretion when integrating into
 // production builds.
 // Updated for ProffieOS 8.1 compatibility
-// v2.2.1
+// v2.2.2
 #ifndef PROPS_JMT_FETT263_WRAPPER_H
 #define PROPS_JMT_FETT263_WRAPPER_H
 
@@ -646,7 +646,8 @@ protected:
 
 	#ifdef JMT_ROLL_PRESETS
 		bool  roll_preset_armed_ = false;
-		float roll_preset_start_angle_ = 0.0f;
+		float roll_preset_last_ = 0.0f;
+		float roll_preset_accumulated_ = 0.0f;
 	#endif
 
 	#ifdef JMT_FLICK_PRESETS
@@ -715,7 +716,14 @@ protected:
 	#endif  // CHASSIS_DETECT_PIN
 
 	#ifdef JMT_ROLL_PRESETS
-		// Roll-to-change-preset, only when blade OFF and chassis OUT
+		// Roll-to-change-preset, only when blade OFF and chassis OUT.
+		// Uses an unwrapped-angle accumulator: each loop tick's delta is
+		// normalized into [-pi, pi] before being summed, so the IMU's +-180
+		// wrap is invisible to the running total and the sign of cumulative
+		// rotation stays unambiguous through any number of full turns. The
+		// trigger threshold is an exact 180 degrees with no margin band,
+		// and overshoot carries forward toward the next trigger instead of
+		// being thrown away on reset.
 		void HandleRollPresetGesture() {
 			if (SaberBase::IsOn() || chassis_in_) {
 				roll_preset_armed_ = false;
@@ -731,25 +739,31 @@ protected:
 				return;
 			}
 
-			// First time in range: capture baseline roll
+			// First time in armable range: snapshot the current roll as the
+			// accumulator's reference point and clear any prior total.
 			if (!roll_preset_armed_) {
-				roll_preset_start_angle_ = roll;
-				roll_preset_armed_	= true;
+				roll_preset_last_ = roll;
+				roll_preset_accumulated_ = 0.0f;
+				roll_preset_armed_ = true;
 				return;
 			}
 
-			// delta roll in [-pi, pi]
-			float delta = roll - roll_preset_start_angle_;
-			if (delta >  M_PI)	delta -= 2.0f * M_PI;
-			if (delta < -M_PI)	delta += 2.0f * M_PI;
+			// Per-tick rotation step, wrap-aware. Loop rate is hundreds of
+			// Hz so a single step can never itself exceed +-pi in practice.
+			float step = roll - roll_preset_last_;
+			if (step >  M_PI) step -= 2.0f * M_PI;
+			if (step < -M_PI) step += 2.0f * M_PI;
+			roll_preset_last_ = roll;
+			roll_preset_accumulated_ += step;
 
-			const float ROLL_THRESHOLD = 170.0f * M_PI / 180.0f;
-
-			if (delta > ROLL_THRESHOLD) {
-				roll_preset_start_angle_ = roll;
+			// Exact 180-deg threshold. Subtract M_PI on fire (not zero out)
+			// so any overshoot past the threshold counts toward the next
+			// trigger -- keeps the gesture feeling consistent at any speed.
+			if (roll_preset_accumulated_ >=  M_PI) {
+				roll_preset_accumulated_ -= M_PI;
 				next_preset();
-			} else if (delta < -ROLL_THRESHOLD) {
-				roll_preset_start_angle_ = roll;
+			} else if (roll_preset_accumulated_ <= -M_PI) {
+				roll_preset_accumulated_ += M_PI;
 				previous_preset();
 			}
 		}
