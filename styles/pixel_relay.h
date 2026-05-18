@@ -55,6 +55,13 @@ public:
     return LayerRunResult::UNKNOWN;
   }
 
+private:
+  PONUA COLOR_A a_;
+  PONUA COLOR_B b_;
+  bool phase_a_ = true;
+  bool on_ = false;
+
+public:
   auto getColor(int led) -> decltype(a_.getColor(led) * 1) {
     decltype(a_.getColor(led) * 1) ret = RGBA_um_nod::Transparent();
     if (on_) {
@@ -63,12 +70,6 @@ public:
     }
     return ret;
   }
-
-private:
-  PONUA COLOR_A a_;
-  PONUA COLOR_B b_;
-  bool phase_a_ = true;
-  bool on_ = false;
 };
 
 #endif  // STYLES_PIXEL_RELAY_H
