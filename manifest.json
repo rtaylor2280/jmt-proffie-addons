@@ -1,5 +1,5 @@
 {
-  "version": "1.0.12",
+  "version": "1.0.13",
   "minProffieVersion": "7.14",
   "testedUpTo": "8.10",
   "files": [
@@ -14,6 +14,10 @@
     {
       "path": "props/jmt_fett263_wrapper.h",
       "sha256": "3bdae544ff2c5e1225952b1478597a19454c2f38fd6c2bcb28f014aa881e2bc8"
+    },
+    {
+      "path": "styles/pixel_relay.h",
+      "sha256": "146524ab47bff961a9eb843ed63ee54abd4178a3379e3aa8960132f748a58248"
     }
   ]
 }
