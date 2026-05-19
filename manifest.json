@@ -1,5 +1,5 @@
 {
-  "version": "1.0.17",
+  "version": "1.0.18",
   "minProffieVersion": "7.14",
   "testedUpTo": "8.10",
   "files": [
@@ -18,6 +18,28 @@
     {
       "path": "styles/pixel_relay.h",
       "sha256": "4321b2edb08f244b0feef7e0b18f1744e79d5d970508e723ea275a7855710a81"
+    }
+  ],
+  "changelog": [
+    {
+      "version": "1.0.18",
+      "date": "2026-05-19",
+      "notes": "Added 'What's New' release notes\n- This section. Now you can see what changed in the JMT Add-ons each time you update.\n- No functional code changes from v1.0.17."
+    },
+    {
+      "version": "1.0.17",
+      "date": "2026-05-18",
+      "notes": "Added Pixel Relay style\n- Alternating two-color flash on 1 or 2 pixels (red 9x then green 5x, etc.)\n- Designed for Luke ROTJ cave-scene arrow accents\n- Configurable: flash period, single-pixel mode, start-index offset\n- Available as PixelRelay (top-level) or PixelRelayL (layer form)"
+    },
+    {
+      "version": "1.0.10",
+      "date": "2026-05-17",
+      "notes": "Added chassis detect via BladeID resistance\n- Detect chassis presence using the BladeID resistance reading instead of a dedicated detect pin\n- Drop-in alternative to CHASSIS_DETECT_PIN, fires the same chassisin/out sounds and triggers\n- Configured via JMT_CHASSIS_DETECT_RANGE (min/max of the chassis-out detection window)\n- Lets removable-chassis builds reuse the BladeID line and save a physical detect wire"
+    },
+    {
+      "version": "1.0.8",
+      "date": "2026-05-16",
+      "notes": "Added JMT_NO_BLADE_VALUE for blade detect on ProffieOS 7.x\n- Brings the OS 8+ NO_BLADE_ID_RANGE behavior to users still on ProffieOS 7.x\n- Lets you use a custom sentinel ohm value to mark 'no blade' in your BladeConfig\n- Fires EFFECT_BLADEIN and EFFECT_BLADEOUT correctly on state transitions\n- Plays bladein.wav and bladeout.wav on insert/remove"
     }
   ]
 }
