@@ -1,5 +1,5 @@
 {
-  "version": "1.0.16",
+  "version": "1.0.17",
   "minProffieVersion": "7.14",
   "testedUpTo": "8.10",
   "files": [
@@ -17,7 +17,7 @@
     },
     {
       "path": "styles/pixel_relay.h",
-      "sha256": "04e44d88946b2b172a33c69d63d077c1ae2418b5e4c39143d724fd2ad8d19917"
+      "sha256": "4321b2edb08f244b0feef7e0b18f1744e79d5d970508e723ea275a7855710a81"
     }
   ]
 }
