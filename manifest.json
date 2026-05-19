@@ -1,6 +1,7 @@
 {
-  "version": "1.0.18",
+  "version": "1.0.19",
   "minProffieVersion": "7.14",
+  "minStudioVersion": null,
   "testedUpTo": "8.10",
   "files": [
     {
@@ -21,6 +22,11 @@
     }
   ],
   "changelog": [
+    {
+      "version": "1.0.19",
+      "date": "2026-05-19",
+      "notes": "Internal versioning workflow update\n- Addons-repo versioning rules now match the JMT Studio pattern (explicit PATCH/MINOR/MAJOR bumps with defined criteria)\n- Manifest schema adds an optional 'minStudioVersion' field for future Studio-coordinated MAJOR bumps\n- No user-visible behavior change from v1.0.18"
+    },
     {
       "version": "1.0.18",
       "date": "2026-05-19",
