@@ -1,5 +1,5 @@
 {
-  "version": "1.0.19",
+  "version": "1.0.20",
   "minProffieVersion": "7.14",
   "minStudioVersion": null,
   "testedUpTo": "8.10",
@@ -14,7 +14,7 @@
     },
     {
       "path": "props/jmt_fett263_wrapper.h",
-      "sha256": "3bdae544ff2c5e1225952b1478597a19454c2f38fd6c2bcb28f014aa881e2bc8"
+      "sha256": "22994a6ff8fd9f807d92f53d52b6cced3e48483513815795b1536504e88e4614"
     },
     {
       "path": "styles/pixel_relay.h",
@@ -22,6 +22,11 @@
     }
   ],
   "changelog": [
+    {
+      "version": "1.0.20",
+      "date": "2026-07-13",
+      "notes": "More reliable chassis detect via BladeID range\n- Chassis-out detection now debounces the BladeID reading instead of reacting to a single noisy scan, so open-circuit drift and the contact sweep while seating the chassis no longer flip chassis state back and forth\n- Debounce strength is tunable with JMT_CHASSIS_RANGE_STABLE_COUNT (default 3 scans)\n- New JMT_DEBUG_CHASSIS_RANGE option prints the raw reading each scan to help tune your ranges"
+    },
     {
       "version": "1.0.19",
       "date": "2026-05-19",
