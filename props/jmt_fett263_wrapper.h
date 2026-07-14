@@ -922,6 +922,18 @@ protected:
 
 // ---------- Helpers: JMT chassis-detect-range backend ---------
 #ifdef JMT_CHASSIS_DETECT_RANGE
+	// Consecutive-scan debounce for the range backend. The pin path gets a
+	// 30 ms debounce; a raw BladeID read gets none, so a single noisy scan
+	// flips chassis state. Two things produce those spikes: open-circuit drift
+	// while the chassis is out, and the contact resistance sweeping through the
+	// whole range as the chassis physically seats/unseats. Require the chassis
+	// -out verdict to hold this many consecutive scans before committing.
+	// Detect latency for a REAL change = count * BLADE_ID_SCAN_MILLIS, so keep
+	// it small; raise it only if bounce persists.
+	#ifndef JMT_CHASSIS_RANGE_STABLE_COUNT
+	#define JMT_CHASSIS_RANGE_STABLE_COUNT 3
+	#endif
+
 	// Hook PropBase::id() (virtual, already overridden by Fett263) so every
 	// BladeID scan also refreshes our chassis-range read. id() returns the
 	// post-BLADE_ID_CLASS-chain value, so if NO_BLADE_ID_RANGE is active and
@@ -930,7 +942,30 @@ protected:
 	float id(bool announce = false) override {
 		float val = SaberFett263Buttons::id(announce);
 		float raw = (val >= NO_BLADE) ? val - NO_BLADE : val;
-		chassis_range_out_ = IsInChassisOutRange(raw);
+		bool out_now = IsInChassisOutRange(raw);
+
+		// Integrator debounce: whenever the instantaneous verdict agrees with
+		// the committed state, clear the counter; otherwise count agreeing
+		// contrary scans and flip the committed state only once the threshold
+		// is reached. A lone spike (count never reaches threshold) is ignored.
+		if (out_now == chassis_range_out_) {
+			chassis_range_stable_count_ = 0;
+		} else if (++chassis_range_stable_count_ >= JMT_CHASSIS_RANGE_STABLE_COUNT) {
+			chassis_range_out_ = out_now;
+			chassis_range_stable_count_ = 0;
+		}
+
+		#ifdef JMT_DEBUG_CHASSIS_RANGE
+			Serial.print("CHASSIS raw:");
+			Serial.print(raw);
+			Serial.print("  out_now:");
+			Serial.print(out_now);
+			Serial.print("  committed:");
+			Serial.print(chassis_range_out_);
+			Serial.print("  cnt:");
+			Serial.println(chassis_range_stable_count_);
+		#endif
+
 		return val;
 	}
 
@@ -940,8 +975,9 @@ protected:
 	}
 
 	bool chassis_range_out_ = false;
+	uint8_t chassis_range_stable_count_ = 0;
 
-	// Called once per Loop(). Pushes the current chassis-range read into the
+	// Called once per Loop(). Pushes the DEBOUNCED chassis-range read into the
 	// shared UpdateChassisState machine, which handles transition detection,
 	// sound, favorites abort, and JMT_CHASSIS_WAKE -- same as the pin path.
 	void HandleJmtChassisRange() {
