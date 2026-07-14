@@ -1,5 +1,5 @@
 {
-  "version": "1.0.21",
+  "version": "1.0.22",
   "minProffieVersion": "7.14",
   "minStudioVersion": null,
   "testedUpTo": "8.10",
@@ -14,7 +14,7 @@
     },
     {
       "path": "props/jmt_fett263_wrapper.h",
-      "sha256": "efcd92fef192b1d67d70a0e1a11c823088ba47dc559634a8a9140428fb6d94ec"
+      "sha256": "852240a5aa6a3f6b67c863e6bbe3d35e69e9ae2630109eef737ccd4bcdee1c33"
     },
     {
       "path": "styles/pixel_relay.h",
@@ -22,6 +22,11 @@
     }
   ],
   "changelog": [
+    {
+      "version": "1.0.22",
+      "date": "2026-07-13",
+      "notes": "Fix boot-loop from a noisy BladeID reading (chassis out)\n- With the chassis out, an unstable open-circuit reading could dip past the no-blade threshold and make ProffieOS reload the font every scan, looking like the saber repeatedly starting to boot\n- The wrapper now holds the current blade config until a different one reads steadily for several scans, so a transient dip no longer triggers a reload; a real blade insert/removal still registers\n- Hold strength is tunable with JMT_CONFIG_STABLE_COUNT (default 3; set to 1 to disable)"
+    },
     {
       "version": "1.0.21",
       "date": "2026-07-13",

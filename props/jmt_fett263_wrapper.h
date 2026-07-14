@@ -950,6 +950,15 @@ protected:
 	#define JMT_CHASSIS_RANGE_STABLE_COUNT 3
 	#endif
 
+	// Consecutive-scan hold for the OS BladeID config selection (blade vs
+	// no-blade vs which blade). A noisy open-circuit reading diving past the
+	// no-blade floor makes the OS reload the font every scan -- a boot-loop
+	// when the chassis is out. Hold the current config until a different one
+	// is indicated this many scans in a row. See id() below.
+	#ifndef JMT_CONFIG_STABLE_COUNT
+	#define JMT_CONFIG_STABLE_COUNT 3
+	#endif
+
 	// Hook PropBase::id() (virtual, already overridden by Fett263) so every
 	// BladeID scan also refreshes our chassis-range read. id() returns the
 	// post-BLADE_ID_CLASS-chain value, so if NO_BLADE_ID_RANGE is active and
@@ -982,6 +991,25 @@ protected:
 			chassis_range_stable_count_ = 0;
 		}
 
+		// Config-selection hold: a noisy open-circuit reading can dive past the
+		// no-blade floor for a scan or two, making the OS re-pick a BladeConfig
+		// and reload the font every scan (the boot-loop seen with the chassis
+		// out). Averaging (BLADE_ID_TIMES) does not help once the AVERAGED value
+		// is what crosses, so debounce the DECISION: only let a config change
+		// reach the OS after the new config holds for N consecutive scans. A
+		// real blade insert/removal is sustained and still switches after N.
+		bool config_held = false;
+		if (current_config) {
+			size_t candidate = FindBestConfigForId(val);
+			if (blades + candidate == current_config) {
+				config_hold_count_ = 0;              // agrees with current config
+			} else if (++config_hold_count_ < JMT_CONFIG_STABLE_COUNT) {
+				config_held = true;                  // transient -> hold current
+			} else {
+				config_hold_count_ = 0;              // sustained -> allow change
+			}
+		}
+
 		#ifdef JMT_DEBUG_CHASSIS_RANGE
 			Serial.print("CHASSIS raw:");
 			Serial.print(raw);
@@ -990,9 +1018,16 @@ protected:
 			Serial.print("  committed:");
 			Serial.print(chassis_range_out_);
 			Serial.print("  cnt:");
-			Serial.println(chassis_range_stable_count_);
+			Serial.print(chassis_range_stable_count_);
+			Serial.print("  cfgHold:");
+			Serial.print(config_held);
+			Serial.print("  holdCnt:");
+			Serial.println(config_hold_count_);
 		#endif
 
+		// While holding, feed the OS the current config's own ohm so its
+		// FindBestConfig re-selects the same config and skips the font reload.
+		if (config_held) return current_config->ohm;
 		return val;
 	}
 
@@ -1003,6 +1038,7 @@ protected:
 
 	bool chassis_range_out_ = false;
 	uint8_t chassis_range_stable_count_ = 0;
+	uint8_t config_hold_count_ = 0;
 
 	// Called once per Loop(). Pushes the DEBOUNCED chassis-range read into the
 	// shared UpdateChassisState machine, which handles transition detection,
