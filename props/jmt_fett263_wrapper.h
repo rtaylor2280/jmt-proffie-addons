@@ -211,6 +211,18 @@ void Loop() override {
 		HandleChargeDetect();
 
 		#ifdef JMT_CHARGE_STYLE_PRESET
+			// Hold the charge preset while charging. A manual `scanid` runs
+			// FindBladeAgain -> FindBlade -> SetPreset(0/saved), knocking us
+			// off the charge preset (the id() freeze blocks the AUTOMATIC scan
+			// path, but not a hand-typed scanid). Charge lockout blocks user
+			// preset changes, so re-asserting here only self-heals the display;
+			// IsChargePreset makes it a no-op once seated. Runs after
+			// SaberFett263Buttons::Loop() so it corrects same-frame.
+			if (charging_active_ && HasChargePreset() &&
+				!IsChargePreset(current_preset_.preset_num)) {
+				EnterChargePreset();
+			}
+
 			int current = current_preset_.preset_num;
 
 			if (!preset_tracker_initialized_) {
@@ -725,6 +737,8 @@ protected:
 		// and overshoot carries forward toward the next trigger instead of
 		// being thrown away on reset.
 		void HandleRollPresetGesture() {
+			// No preset changes while charging (charge mode is locked).
+			if (g_charging) { roll_preset_armed_ = false; return; }
 			if (SaberBase::IsOn() || chassis_in_) {
 				roll_preset_armed_ = false;
 				return;
@@ -772,6 +786,8 @@ protected:
 	// flick-to-change-preset, only when blade OFF and chassis OUT
 	#ifdef JMT_FLICK_PRESETS
 		void HandlePosePresetFlick() {
+			// No preset changes while charging (charge mode is locked).
+			if (g_charging) { pose_state_ = POSE_IDLE; arm_eligible_until_ = 0; return; }
 			if (SaberBase::IsOn() || chassis_in_) {
 				pose_state_ = POSE_IDLE;
 				arm_eligible_until_ = 0;
@@ -940,6 +956,17 @@ protected:
 	// bumped the reading we recover the raw ohm by subtracting NO_BLADE
 	// before the range compare.
 	float id(bool announce = false) override {
+		// While charging, freeze BladeID-driven detection so the ongoing scan
+		// cannot perturb charge mode. Returning the current config's own ohm
+		// makes the OS FindBestConfig re-select the SAME config (no blade
+		// in/out, no automatic preset reload), and returning before the chassis
+		// read below leaves chassis_range_out_ untouched (no chassis in/out)
+		// until charging ends. A manual `scanid` still reloads the preset via
+		// FindBlade -> SetPreset -- the charge-preset re-assert in Loop() heals
+		// that separately.
+		extern BladeConfig* current_config;
+		if (g_charging && current_config) return current_config->ohm;
+
 		float val = SaberFett263Buttons::id(announce);
 		float raw = (val >= NO_BLADE) ? val - NO_BLADE : val;
 		bool out_now = IsInChassisOutRange(raw);
