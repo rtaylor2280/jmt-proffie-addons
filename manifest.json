@@ -1,5 +1,5 @@
 {
-  "version": "1.0.22",
+  "version": "1.0.23",
   "minProffieVersion": "7.14",
   "minStudioVersion": null,
   "testedUpTo": "8.10",
@@ -14,7 +14,7 @@
     },
     {
       "path": "props/jmt_fett263_wrapper.h",
-      "sha256": "852240a5aa6a3f6b67c863e6bbe3d35e69e9ae2630109eef737ccd4bcdee1c33"
+      "sha256": "780aafc266926e853e7628138525b5e82a1826e6315aada3b96bb1f5035dfa93"
     },
     {
       "path": "styles/pixel_relay.h",
@@ -22,6 +22,11 @@
     }
   ],
   "changelog": [
+    {
+      "version": "1.0.23",
+      "date": "2026-08-07",
+      "notes": "Prop is now a single-file drop-in\n- The prop no longer includes common/charge_state.h. That header only declares the charge-full flag, and the prop defines the flag itself, so the include never did anything\n- common/charge_state.h is still needed by configs that use a charge-state style, which pull it in through functions/charge_full_prop.h\n- No behavior change: this removes a redundant include and nothing else"
+    },
     {
       "version": "1.0.22",
       "date": "2026-07-13",

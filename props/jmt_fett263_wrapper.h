@@ -21,7 +21,13 @@
 
 // Base Fett263 button prop
 #include "saber_fett263_buttons.h"
-#include "../common/charge_state.h"
+
+// common/charge_state.h is deliberately NOT included here. It declares
+// g_charge_full, and this file defines it below, so the prop is the producer of
+// that flag and never needs the declaration. The consumer is
+// functions/charge_full_prop.h, which is compiled in the CONFIG_PRESETS pass
+// (before this file) and includes charge_state.h itself. Including it here
+// bought nothing and cost manual installers a second file.
 
 #undef PROP_TYPE
 #define PROP_TYPE JMTFett263Wrapper
