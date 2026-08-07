@@ -1,5 +1,5 @@
 {
-  "version": "1.0.23",
+  "version": "1.0.24",
   "minProffieVersion": "7.14",
   "minStudioVersion": null,
   "testedUpTo": "8.10",
@@ -14,7 +14,7 @@
     },
     {
       "path": "props/jmt_fett263_wrapper.h",
-      "sha256": "780aafc266926e853e7628138525b5e82a1826e6315aada3b96bb1f5035dfa93"
+      "sha256": "43d558fe20e0651ef5346fc517c3d5e05388ff6360f055ca778e66aa9be98f5d"
     },
     {
       "path": "styles/pixel_relay.h",
@@ -22,6 +22,11 @@
     }
   ],
   "changelog": [
+    {
+      "version": "1.0.24",
+      "date": "2026-08-07",
+      "notes": "Charge audio no longer stutters while the charge preset is held\n- While charging, the wrapper was checking the preset count on every pass of the main loop. That check is not free: it locks and remounts the SD card, and while the card is locked ProffieOS throws away any pending audio buffer refill instead of delaying it\n- The result was starved playback during charging: chargebegin, battery level and charge complete could stutter, restart or drag\n- The charge preset index is now remembered, so holding the charge preset costs no SD access at all. It is recomputed whenever charging ends or the preset moves, so a blade config change cannot leave a stale value behind\n- No configuration change and no new options"
+    },
     {
       "version": "1.0.23",
       "date": "2026-08-07",

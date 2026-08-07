@@ -221,12 +221,25 @@ void Loop() override {
 			// FindBladeAgain -> FindBlade -> SetPreset(0/saved), knocking us
 			// off the charge preset (the id() freeze blocks the AUTOMATIC scan
 			// path, but not a hand-typed scanid). Charge lockout blocks user
-			// preset changes, so re-asserting here only self-heals the display;
-			// IsChargePreset makes it a no-op once seated. Runs after
-			// SaberFett263Buttons::Loop() so it corrects same-frame.
-			if (charging_active_ && HasChargePreset() &&
-				!IsChargePreset(current_preset_.preset_num)) {
-				EnterChargePreset();
+			// preset changes, so re-asserting here only self-heals the display.
+			// Runs after SaberFett263Buttons::Loop() so it corrects same-frame.
+			//
+			// The seated case must not touch the SD card. GetNumberOfPresets()
+			// is not an accessor: it builds a CurrentPreset and calls
+			// SetPreset(-1), which takes LOCK_SD and remounts the card. While
+			// that lock is held ProcessAudioStreams() DISCARDS any pending
+			// buffer refill rather than deferring it, so polling it every loop
+			// starves audio playback for the whole time the saber is charging.
+			// charge_preset_index_ caches the index; it is dropped whenever
+			// charging ends or the preset moves, so a blade-config change can
+			// never leave a stale index in place.
+			if (charging_active_) {
+				if (charge_preset_index_ < 0 ||
+					current_preset_.preset_num != charge_preset_index_) {
+					EnterChargePreset();
+				}
+			} else {
+				charge_preset_index_ = -1;
 			}
 
 			int current = current_preset_.preset_num;
@@ -235,6 +248,10 @@ void Loop() override {
 				last_seen_preset_ = current;
 				preset_tracker_initialized_ = true;
 			} else if (current != last_seen_preset_) {
+				// Any preset movement can mean a different blade config, and
+				// therefore a different preset count. Drop the cached index so
+				// the next charging loop recomputes it exactly once.
+				charge_preset_index_ = -1;
 				HandleChargePresetLanding(last_seen_preset_, current);
 				last_seen_preset_ = current_preset_.preset_num;
 			}
@@ -518,6 +535,10 @@ protected:
 	#ifdef JMT_CHARGE_STYLE_PRESET
 		bool preset_tracker_initialized_ = false;
 		int last_seen_preset_ = -1;
+		// Cached charge-preset index, or -1 when unknown. Exists so the
+		// charging hold in Loop() costs no SD access once seated; see the
+		// note there. Invalidated when charging ends and on any preset move.
+		int charge_preset_index_ = -1;
 
 		int ChargePresetIndex() {
 			return GetNumberOfPresets() - 1;
@@ -532,11 +553,16 @@ protected:
 		}
 
 		void HandleChargePresetLanding(int previous, int current) {
-			int count = GetNumberOfPresets();
-
-			if (count <= 1) return;
+			// Cheap gate first: this does nothing while charging, so there is
+			// no reason to pay for GetNumberOfPresets() (LOCK_SD + remount)
+			// before finding that out.
 			if (charging_active_) return;
-			if (!IsChargePreset(current)) return;
+
+			int count = GetNumberOfPresets();
+			if (count <= 1) return;
+			// count - 1 IS the charge preset index; reuse the value just read
+			// rather than calling IsChargePreset(), which reads it again.
+			if (current != count - 1) return;
 
 			if (previous < 0 || previous >= count) {
 				AdvancePresetForward();
@@ -573,12 +599,17 @@ protected:
 		}
 
 		void EnterChargePreset() {
-			if (!HasChargePreset()) return;
+			// Exactly one GetNumberOfPresets() per call, on the path that is
+			// about to load a font anyway. The old form called it twice, once
+			// through HasChargePreset() and once through ChargePresetIndex(),
+			// and each call takes LOCK_SD and remounts the card.
+			int count = GetNumberOfPresets();
+			if (count <= 0) return;
 
-			int charge_preset = ChargePresetIndex();
-			int current = current_preset_.preset_num;
+			int charge_preset = count - 1;
+			charge_preset_index_ = charge_preset;
 
-			if (IsChargePreset(current)) return;
+			if (current_preset_.preset_num == charge_preset) return;
 
 			SetPreset(charge_preset, false);
 		}
