@@ -390,6 +390,49 @@ protected:
 	bool charge_full_ = false;
 	uint32_t charge_full_since_ = 0;
 
+	// Two ways to express "full", and volts wins when both are present.
+	//
+	// The percent path cannot see the top of a charge cycle. ProffieOS derives
+	// battery_percent() from voltage with max_v = 4.1 and clamps the result to
+	// 100 (common/battery_monitor.h), so every cell at or above 4.1 V reports
+	// exactly 100%. Converted back, the whole usable span of the percent
+	// defines is:
+	//     CHARGE_FULL_ENTER 32700 -> 4.0978 V
+	//     CHARGE_FULL_ENTER 32750 -> 4.0994 V
+	//     CHARGE_FULL_ENTER 32768 -> 4.1000 V   (the maximum, and the ceiling)
+	// About 2.2 mV of travel, below the noise floor of the reading, and nothing
+	// above 4.1 V is representable at all. A Li-ion reaches 4.1 V early in the
+	// constant-voltage phase with a real amount of capacity still to take, so
+	// the announcement fires well before the charger terminates. Measured on a
+	// cell sitting at 4.18 V and still charging: percent said 100.
+	//
+	// Volts have no such ceiling. Define CHARGE_FULL_ENTER_V and the state
+	// machine compares battery_monitor.battery() directly.
+	//
+	// CHOOSING A THRESHOLD: it must sit BELOW whatever the charge IC actually
+	// floats at, or it can never be reached and this fails the other way. Watch
+	// the serial monitor through a full cycle and take the peak. 4.15 is the
+	// default because it is under every common float voltage; raise it toward
+	// 4.2 once the hardware's real number is known.
+	#if defined(CHARGE_FULL_ENTER_V) || defined(CHARGE_FULL_EXIT_V)
+		#define JMT_CHARGE_FULL_USES_VOLTS
+	#endif
+
+	#ifdef JMT_CHARGE_FULL_USES_VOLTS
+		#ifndef CHARGE_FULL_ENTER_V
+			#define CHARGE_FULL_ENTER_V 4.15f
+		#endif
+		#ifndef CHARGE_FULL_EXIT_V
+			#define CHARGE_FULL_EXIT_V 4.05f
+		#endif
+		// NOT an #if - the preprocessor does integer arithmetic only, and a
+		// float literal in a #if is a hard error ("floating constant in
+		// preprocessor expression"). static_assert sees the same constants and
+		// still fails the build, just at compile time instead of preprocess.
+		static_assert(CHARGE_FULL_EXIT_V < CHARGE_FULL_ENTER_V,
+			"CHARGE_FULL_EXIT_V must be less than CHARGE_FULL_ENTER_V.");
+	#endif
+
 	#ifndef CHARGE_FULL_ENTER
 		#define CHARGE_FULL_ENTER 32700
 	#endif
@@ -627,14 +670,24 @@ protected:
 			return;
 		}
 
-		int level32768 = clampi32(
-			battery_monitor.battery_percent() * 32768 / 100,
-			0, 32768);
+		// Same state machine either way - only the quantity being compared
+		// changes. See the threshold notes above for why volts exist.
+		#ifdef JMT_CHARGE_FULL_USES_VOLTS
+			const float volts = battery_monitor.battery();
+			const bool  at_full   = volts >= CHARGE_FULL_ENTER_V;
+			const bool  below_exit = volts <= CHARGE_FULL_EXIT_V;
+		#else
+			int level32768 = clampi32(
+				battery_monitor.battery_percent() * 32768 / 100,
+				0, 32768);
+			const bool at_full    = level32768 >= CHARGE_FULL_ENTER;
+			const bool below_exit = level32768 <= CHARGE_FULL_EXIT;
+		#endif
 
 		uint32_t now = millis();
 
 		if (!charge_full_) {
-			if (level32768 >= CHARGE_FULL_ENTER) {
+			if (at_full) {
 				if (!charge_full_since_) {
 					charge_full_since_ = now;
 				} else if (now - charge_full_since_ > CHARGE_FULL_DWELL_MS) {
@@ -644,7 +697,7 @@ protected:
 				charge_full_since_ = 0;
 			}
 		} else {
-			if (level32768 <= CHARGE_FULL_EXIT) {
+			if (below_exit) {
 				charge_full_ = false;
 				charge_full_since_ = 0;
 			}

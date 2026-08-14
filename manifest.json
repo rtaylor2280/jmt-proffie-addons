@@ -1,5 +1,5 @@
 {
-  "version": "1.0.24",
+  "version": "1.0.25",
   "minProffieVersion": "7.14",
   "minStudioVersion": null,
   "testedUpTo": "8.10",
@@ -14,7 +14,7 @@
     },
     {
       "path": "props/jmt_fett263_wrapper.h",
-      "sha256": "43d558fe20e0651ef5346fc517c3d5e05388ff6360f055ca778e66aa9be98f5d"
+      "sha256": "b9e5f9049f2edad996860160f676818388e1fd4410a7f72bda47dc3576c02aad"
     },
     {
       "path": "styles/pixel_relay.h",
@@ -22,6 +22,11 @@
     }
   ],
   "changelog": [
+    {
+      "version": "1.0.25",
+      "date": "2026-08-13",
+      "notes": "Charge complete can now be set in volts, and no longer announces early\n- The full check was expressed as a percentage. ProffieOS derives battery percent from voltage with a maximum of 4.1 V and clamps the result to 100, so every cell at or above 4.1 V reports exactly 100%\n- A Li-ion reaches 4.1 V early in its constant-voltage phase with real capacity still to take, so charge complete could announce well before the charger finished. Seen on a cell sitting at 4.18 V and still charging\n- Converted back to volts, the entire usable range of CHARGE_FULL_ENTER spans about 2 mV: 32700 is 4.0978 V and the maximum 32768 is 4.1000 V. No value of that define could reach the real end of a charge, and tuning it only moved the trigger by less than the noise in the reading\n- Charge full can now be expressed directly in volts with CHARGE_FULL_ENTER_V and CHARGE_FULL_EXIT_V (defaults 4.15 and 4.05). Define either one and the state machine compares battery voltage instead; the percent defines are then ignored\n- Set the enter threshold BELOW whatever your charge board actually floats at, or it can never be reached and full is never announced. Watch the serial monitor through a complete cycle and take the peak reading\n- Existing configs are unaffected. Without the new defines the percent path behaves exactly as before"
+    },
     {
       "version": "1.0.24",
       "date": "2026-08-07",
