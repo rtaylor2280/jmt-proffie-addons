@@ -49,8 +49,46 @@
 #error "JMT_PITCH_OFFSET / JMT_ROLL_OFFSET require ORIENTATION_ROTATION to be defined"
 #endif
 
+// JMT_BLADE_DETECT: blade presence derived from the BladeID scan, for configs
+// that have no physical blade detect pin. It is not a second detect system --
+// it stands in for the gesture-state block Fett263 only compiles when
+// BLADE_DETECT_PIN is defined. A pin config already has that behavior natively
+// and gains nothing from this define, so enabling both is redundant rather than
+// additive. With FETT263_SAVE_GESTURE_OFF it is actively harmful: both handlers
+// call SaveGestureState(), which writes gesture.ini to SD, and the second write
+// captures the already-cleared gestureon -- overwriting the user's real
+// preference so gestures stay off after the next insert.
 #if defined(BLADE_DETECT_PIN) && defined(JMT_BLADE_DETECT)
-  #error "Cannot use both BLADE_DETECT_PIN and JMT_BLADE_DETECT. Choose one blade detect method."
+  #error "BLADE_DETECT_PIN already provides blade detect natively -- JMT_BLADE_DETECT is only for configs that detect the blade via BladeID instead. Remove JMT_BLADE_DETECT."
+#endif
+
+// Internal umbrella: defined when EITHER blade detect method is configured --
+// the physical pin or the BladeID-driven JMT path. Downstream consumers gate on
+// this so they behave identically for both backends. Mirrors
+// JMT_HAS_CHASSIS_DETECT below.
+#if defined(BLADE_DETECT_PIN) || defined(JMT_BLADE_DETECT)
+#define JMT_HAS_BLADE_DETECT
+#endif
+
+// JMT_SWING_ON_BLOCK: swallow the swing-on ignition gesture while no blade is
+// installed. Same block and same shape as the chassis-out case in Event2, and
+// for the same reason -- there is nothing to ignite.
+//   State is read at the moment of the swing rather than latched, so a saber
+//   powered up with no blade already in is covered; neither backend clears
+//   saved_gesture_control.gestureon at startup (Fett only clears it on a blade
+//   detect latch edge, and HandleJmtBladeDetect deliberately skips its first
+//   call), which is why gesture state is the wrong thing to gate on here.
+//   Blocks the swing-on gesture only. Button ignition is untouched, and so are
+//   the other ignition gestures (twist / stab / thrust). Only the bare
+//   EVENT_SWING/MODE_OFF id is swallowed, so the button-modified swing events
+//   (spin mode, aux+swing) are unaffected.
+//   Requires a blade detect method -- see the check below. It only has an
+//   EFFECT alongside FETT263_SWING_ON or FETT263_SWING_ON_PREON, but is harmless
+//   without them and so is not an error: saved_gesture_control.swingon defaults
+//   to 0 unless SWING_GESTURE is set, so Fett's own handler already declines the
+//   ignition and this block is swallowing an event that was going nowhere.
+#if defined(JMT_SWING_ON_BLOCK) && !defined(JMT_HAS_BLADE_DETECT)
+#error "JMT_SWING_ON_BLOCK requires a blade detect method -- define BLADE_DETECT_PIN or JMT_BLADE_DETECT."
 #endif
 
 // JMT_NO_BLADE_VALUE: back-port of the OS 8+ NO_BLADE_ID_RANGE mechanism for
@@ -288,12 +326,20 @@ void Loop() override {
 // ---------- Event2 ------------------------------------------------
 bool Event2(enum BUTTON button, EVENT event, uint32_t modifiers) override {
 
-	#ifdef JMT_HAS_CHASSIS_DETECT
-		// If chassis is OUT, block swing-based ignition while OFF
-		if (!chassis_in_) {
-			if (EVENTID(button, event, modifiers) ==
-				EVENTID(BUTTON_NONE, EVENT_SWING, MODE_OFF)) {
-			return true;  // swallow the swing-on event
+	#if defined(JMT_HAS_CHASSIS_DETECT) || defined(JMT_SWING_ON_BLOCK)
+		// Block swing-based ignition while OFF when there is nothing to ignite:
+		// the chassis is OUT, or (JMT_SWING_ON_BLOCK) no blade is installed.
+		if (EVENTID(button, event, modifiers) ==
+			EVENTID(BUTTON_NONE, EVENT_SWING, MODE_OFF)) {
+			if (false
+			#ifdef JMT_HAS_CHASSIS_DETECT
+				|| !chassis_in_
+			#endif
+			#ifdef JMT_SWING_ON_BLOCK
+				|| CurrentBladeConfigIsNoBlade()
+			#endif
+			) {
+				return true;  // swallow the swing-on event
 			}
 		}
 	#endif
@@ -958,22 +1004,33 @@ protected:
 #endif	// JMT_HAS_CHASSIS_DETECT
 
 // ---------- Helpers: JMT blade detect ---------
-#ifdef JMT_BLADE_DETECT
-	// Detects the "no blade" state by comparing the active BladeConfig's ohm
-	// value against a sentinel. Defaults to ProffieOS NO_BLADE; override with
-	// JMT_NO_BLADE_VALUE when the config uses a custom sentinel ohm reading.
-	// Note: a matching BladeConfig entry must exist in the user's array or
-	// this will always return false and "no blade" will never be detected.
+// Available whenever EITHER blade detect method is configured, so any wrapper
+// feature can ask "is a blade in" without caring which backend supplies it.
+// It reads only the result both paths write -- current_config -- and touches no
+// pin or BladeID reading of its own. With BLADE_DETECT_PIN, prop_base's id()
+// adds NO_BLADE to the reading when the pin reports no blade, so current_config
+// lands on the NO_BLADE entry exactly as the BladeID path does.
+#ifdef JMT_HAS_BLADE_DETECT
+	// Detects the "no blade" state from the active BladeConfig's ohm value.
+	// Two identifiers can mean "no blade" and either counts:
+	//   - the standard ProffieOS NO_BLADE bucket (>= NO_BLADE, matching the OS's
+	//     own blade_present() test in prop_base.h);
+	//   - JMT_NO_BLADE_VALUE, a custom sentinel that sits BELOW NO_BLADE and so
+	//     is invisible to that test.
+	// Note: a matching BladeConfig entry must exist in the user's array or this
+	// will always return false and "no blade" will never be detected.
 	bool CurrentBladeConfigIsNoBlade() const {
 		extern BladeConfig* current_config;
 		if (!current_config) return false;
+		if (current_config->ohm >= NO_BLADE) return true;
 #ifdef JMT_NO_BLADE_VALUE
-		return current_config->ohm == JMT_NO_BLADE_VALUE;
-#else
-		return current_config->ohm == NO_BLADE;
+		if (current_config->ohm == JMT_NO_BLADE_VALUE) return true;
 #endif
+		return false;
 	}
+#endif
 
+#ifdef JMT_BLADE_DETECT
 #ifdef JMT_NO_BLADE_VALUE
 	// PollScanId in prop_base.h decides which effect to fire after a BladeID
 	// scan changes current_config by comparing GetNoBladeLevelBefore() against
