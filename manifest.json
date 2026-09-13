@@ -1,5 +1,5 @@
 {
-  "version": "1.1.0",
+  "version": "1.1.1",
   "minProffieVersion": "7.14",
   "minStudioVersion": null,
   "testedUpTo": "8.10",
@@ -14,7 +14,7 @@
     },
     {
       "path": "props/jmt_fett263_wrapper.h",
-      "sha256": "fabae13d6609e643cdcb04a72883460e3e228dce60676b989e7d6c78954c3af8"
+      "sha256": "4411673aaf9e24ecce6b5cd70d7350f7a6ac6b3259d309b4555852acdf43f692"
     },
     {
       "path": "styles/pixel_relay.h",
@@ -23,9 +23,9 @@
   ],
   "changelog": [
     {
-      "version": "1.1.0",
+      "version": "1.1.1",
       "date": "2026-09-13",
-      "notes": "Block swing-on ignition when no blade is installed\n- New define JMT_SWING_ON_BLOCK swallows the swing-on gesture while the hilt is empty, so a swing cannot ignite a blade that is not there\n- Works with either blade detect method: the standard BLADE_DETECT_PIN or the BladeID-driven JMT_BLADE_DETECT. Requires one of them\n- Blade presence is read at the moment of the swing rather than from a latched flag, so a saber powered on with no blade already in is covered. Neither detect method turns gestures off at startup, which is the case this closes\n- Only the swing-on gesture is affected. Button ignition, twist, stab and thrust on are untouched, and so are the swing events that combine with a button\n- Optional. It has an effect alongside FETT263_SWING_ON or FETT263_SWING_ON_PREON, and is harmless without them\n- The no-blade check now recognises both the standard ProffieOS NO_BLADE entry and a custom JMT_NO_BLADE_VALUE sentinel, instead of only one or the other"
+      "notes": "Block swing-on ignition when no blade is installed\n- New define JMT_SWING_ON_BLOCK swallows the swing-on gesture while the hilt is empty, so a swing cannot ignite a blade that is not there\n- Works with either blade detect method: the standard BLADE_DETECT_PIN or the BladeID-driven JMT_BLADE_DETECT. Requires one of them\n- Blade presence is read at the moment of the swing rather than from a latched flag, so a saber powered on with no blade already in is covered. Neither detect method turns gestures off at startup, which is the case this closes\n- Only the swing-on gesture is affected. Button ignition, twist, stab and thrust on are untouched, and so are the swing events that combine with a button\n- Optional. It has an effect alongside FETT263_SWING_ON or FETT263_SWING_ON_PREON, and is harmless without them\n- The no-blade check now recognises both the standard ProffieOS NO_BLADE entry and a custom JMT_NO_BLADE_VALUE sentinel, instead of only one or the other\n- JMT_BLADE_DETECT now fails to compile unless NO_BLADE_ID_RANGE or JMT_NO_BLADE_VALUE is also defined. Without a detect pin nothing pushes the BladeID reading into the no-blade bucket, so the no-blade entry in your blades array can never be selected and the feature silently never fires. On ProffieOS 8.0 or later set NO_BLADE_ID_RANGE around your measured blade-out reading; on 7.x use JMT_NO_BLADE_VALUE"
     },
     {
       "version": "1.0.25",

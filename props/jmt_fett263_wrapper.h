@@ -99,6 +99,25 @@
 #error "JMT_NO_BLADE_VALUE requires JMT_BLADE_DETECT to be defined."
 #endif
 
+// Without a detect pin, SOMETHING has to push the BladeID reading into the
+// no-blade bucket or the no-blade BladeConfig entry can never be selected --
+// FindBestConfigForId picks the nearest ohm entry, and no standard BladeID
+// class can produce a reading anywhere near NO_BLADE (1e9). On a V3 the default
+// BridgedPullupBladeID divides through a 37k pullup: an open line reads about
+// 38M at a saturated ADC, or infinity at a full-scale one, and neither selects
+// the NO_BLADE entry. SnapshotBladeID returns a raw 0-1024 ADC value, which is
+// further away still.
+//   Two things supply the missing step. BLADE_DETECT_PIN, where prop_base's
+// id() adds NO_BLADE itself -- excluded above, so it cannot be the answer here.
+// And NO_BLADE_ID_RANGE, which remaps in-range readings the same way. On
+// ProffieOS 7.x, where that macro does not exist, JMT_NO_BLADE_VALUE is the
+// wrapper's back-port and satisfies this instead.
+//   Without one of them the feature compiles, runs, and silently never fires,
+// which is the failure this check exists to prevent.
+#if defined(JMT_BLADE_DETECT) && !defined(NO_BLADE_ID_RANGE) && !defined(JMT_NO_BLADE_VALUE)
+#error "JMT_BLADE_DETECT needs a way for the BladeID reading to resolve to NO_BLADE, or the blade is never seen as removed. On ProffieOS 8.0+ define NO_BLADE_ID_RANGE <min>,<max> around your blade-out reading. On 7.x define JMT_NO_BLADE_VALUE instead."
+#endif
+
 // JMT_CHASSIS_DETECT_RANGE: chassis detection driven by the BladeID resistance
 // reading, as an alternative to a physical CHASSIS_DETECT_PIN. Defined as
 // min,max -- when the raw BladeID reading falls inside that range the wrapper
