@@ -1,5 +1,5 @@
 {
-  "version": "1.1.1",
+  "version": "1.1.2",
   "minProffieVersion": "7.14",
   "minStudioVersion": null,
   "testedUpTo": "8.10",
@@ -14,7 +14,7 @@
     },
     {
       "path": "props/jmt_fett263_wrapper.h",
-      "sha256": "4411673aaf9e24ecce6b5cd70d7350f7a6ac6b3259d309b4555852acdf43f692"
+      "sha256": "8b6fdf9dd769639945989d989b8ac0fd91b30756f168da0fb7c613daa39c51a8"
     },
     {
       "path": "styles/pixel_relay.h",
@@ -22,6 +22,11 @@
     }
   ],
   "changelog": [
+    {
+      "version": "1.1.2",
+      "date": "2026-10-10",
+      "notes": "Three fixes for BladeID-driven chassis detect\n- Fixed an endless font reload on blade insertion. With JMT_CHASSIS_DETECT_RANGE enabled, inserting a blade could make the saber re-scan its font and replay font.wav on every BladeID scan, over and over. It looks and sounds like the board rebooting, but the board is fine and the serial connection never drops\n- Cause: the config hold added in 1.0.22 was counting calls instead of scans. ProffieOS asks for the BladeID reading once to decide whether the blade config should change, then a second time while applying that change. The hold released on the first call and re-armed on the second, so the decision was undone before it could take effect and the same config was reloaded forever. The scan is now identified directly, so the decision survives\n- This also means JMT_CHASSIS_RANGE_STABLE_COUNT now debounces the number of scans it says it does. Previously a config change in progress could advance it twice in one scan, making chassis detect briefly more twitchy than configured\n- Fixed chassisout.wav playing at startup on a saber powered on with the chassis already removed. The range backend was reporting its \"chassis in\" default before the first BladeID scan returned, so the real state arriving a moment later counted as a change. It now stays silent until it has an actual reading. The detect-pin method never had this, because it reads the pin during startup\n- Added a compile error for BLADE_DETECT_PIN together with NO_BLADE_ID_RANGE when the chassis range is in use. Both add the same no-blade marker to the reading independently, so a blade-out value arrives doubled and chassis detect can never see the chassis as out. A detect pin already supplies that marker, so NO_BLADE_ID_RANGE should be removed in that combination\n- No configuration change needed. JMT_CONFIG_STABLE_COUNT 1 is no longer required as a workaround and can be removed"
+    },
     {
       "version": "1.1.1",
       "date": "2026-09-13",

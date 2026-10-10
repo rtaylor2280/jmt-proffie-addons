@@ -132,6 +132,21 @@
 #error "CHASSIS_DETECT_PIN and JMT_CHASSIS_DETECT_RANGE are mutually exclusive -- pick one chassis detect method."
 #endif
 
+// BLADE_DETECT_PIN and NO_BLADE_ID_RANGE each add NO_BLADE to the reading
+// independently -- prop_base's id() when the pin reports no blade, and
+// NO_BLADE_RangeID when the value falls in the window. With both, a blade-out
+// reading arrives as 2e9 + raw. The chassis range recovers the raw ohm by
+// subtracting NO_BLADE exactly once, so it is left holding 1e9 + raw, which
+// exceeds any sane chassis maximum and makes the chassis read as permanently in.
+//   Scoped to configs that also use the chassis range because that is where the
+// damage is. Elsewhere the double-add is merely redundant: FindBestConfigForId
+// still picks NO_BLADE as nearest, and nothing else consumes the raw value --
+// PollScanId and GetNoBladeLevelBefore both read current_config->ohm, not the
+// reading. Erroring unconditionally would reject a harmless combination.
+#if defined(BLADE_DETECT_PIN) && defined(NO_BLADE_ID_RANGE) && defined(JMT_CHASSIS_DETECT_RANGE)
+#error "BLADE_DETECT_PIN and NO_BLADE_ID_RANGE each add NO_BLADE to the BladeID reading, so a blade-out value arrives doubled and JMT_CHASSIS_DETECT_RANGE's raw recovery is off by 1e9. Remove NO_BLADE_ID_RANGE -- the detect pin already supplies NO_BLADE."
+#endif
+
 // Internal umbrella: defined when EITHER chassis detect method is configured.
 // All downstream consumers (Event2 swing block, roll/flick presets, etc.) gate
 // on this so they work identically for both backends.
@@ -1146,15 +1161,48 @@ protected:
 		float raw = (val >= NO_BLADE) ? val - NO_BLADE : val;
 		bool out_now = IsInChassisOutRange(raw);
 
+		// Both counters below debounce SCANS, but id() is called more than once
+		// per scan and every call used to advance them. ScanBladeIdNow() calls
+		// FindBestConfig() to decide whether the config should change; if it
+		// should, PollScanId() then calls FindBladeAgain() -> FindBlade() ->
+		// FindBestConfig(), which lands here a second time for the same reading.
+		// A manual `scanid` arrives the same way.
+		//
+		// Counting calls instead of scans produced an endless reload: the hold
+		// released on the deciding call and re-armed on the acting one, so the
+		// OS was handed the OLD config's ohm and reloaded it unchanged, every
+		// scan, forever. Steady reading, unchanging config, font.wav on repeat.
+		//
+		// PropBase::last_scan_id_ is public and ScanBladeIdNow() stamps it with
+		// millis() immediately BEFORE the deciding call, so every later call for
+		// the same reading carries the same stamp. Comparing it is exact rather
+		// than a timing heuristic: side effects run once per scan, and the
+		// acting call simply reports what the deciding call concluded.
+		bool new_scan = (last_scan_id_ != last_counted_scan_);
+		if (new_scan) last_counted_scan_ = last_scan_id_;
+
 		// Integrator debounce: whenever the instantaneous verdict agrees with
 		// the committed state, clear the counter; otherwise count agreeing
 		// contrary scans and flip the committed state only once the threshold
 		// is reached. A lone spike (count never reaches threshold) is ignored.
-		if (out_now == chassis_range_out_) {
-			chassis_range_stable_count_ = 0;
-		} else if (++chassis_range_stable_count_ >= JMT_CHASSIS_RANGE_STABLE_COUNT) {
-			chassis_range_out_ = out_now;
-			chassis_range_stable_count_ = 0;
+		//
+		// The first real reading seeds the committed state directly. Until a
+		// scan has happened the backend does not know where the chassis is, and
+		// the "chassis in" default must never reach UpdateChassisState -- it
+		// would consume that machine's silent-init, so the true state arriving a
+		// few scans later becomes a transition and plays chassisout.wav at boot.
+		// One scan is enough to seed because a scan is already the average of
+		// BLADE_ID_TIMES samples; the debounce still governs every later change.
+		if (new_scan) {
+			if (!chassis_range_seeded_) {
+				chassis_range_out_ = out_now;
+				chassis_range_seeded_ = true;
+			} else if (out_now == chassis_range_out_) {
+				chassis_range_stable_count_ = 0;
+			} else if (++chassis_range_stable_count_ >= JMT_CHASSIS_RANGE_STABLE_COUNT) {
+				chassis_range_out_ = out_now;
+				chassis_range_stable_count_ = 0;
+			}
 		}
 
 		// Config-selection hold: a noisy open-circuit reading can dive past the
@@ -1164,8 +1212,12 @@ protected:
 		// is what crosses, so debounce the DECISION: only let a config change
 		// reach the OS after the new config holds for N consecutive scans. A
 		// real blade insert/removal is sustained and still switches after N.
+		//
+		// Only the deciding call may advance or release the hold. On the acting
+		// call config_held stays false, so the true reading reaches the OS and
+		// the change it just authorised actually happens.
 		bool config_held = false;
-		if (current_config) {
+		if (current_config && new_scan) {
 			size_t candidate = FindBestConfigForId(val);
 			if (blades + candidate == current_config) {
 				config_hold_count_ = 0;              // agrees with current config
@@ -1203,13 +1255,22 @@ protected:
 	}
 
 	bool chassis_range_out_ = false;
+	bool chassis_range_seeded_ = false;
 	uint8_t chassis_range_stable_count_ = 0;
 	uint8_t config_hold_count_ = 0;
+	uint32_t last_counted_scan_ = 0;
 
 	// Called once per Loop(). Pushes the DEBOUNCED chassis-range read into the
 	// shared UpdateChassisState machine, which handles transition detection,
 	// sound, favorites abort, and JMT_CHASSIS_WAKE -- same as the pin path.
 	void HandleJmtChassisRange() {
+		// Say nothing until a real reading exists. Loop() runs long before the
+		// first BladeID scan returns, and reporting the "chassis in" default
+		// here would consume UpdateChassisState's silent first call -- the true
+		// state arriving a few scans later would then be a transition and play
+		// chassisout.wav at boot on a saber whose chassis was already out. The
+		// pin backend avoids this by seeding from a real digitalRead in Setup().
+		if (!chassis_range_seeded_) return;
 		UpdateChassisState(!chassis_range_out_);
 	}
 #endif  // JMT_CHASSIS_DETECT_RANGE
