@@ -1268,13 +1268,28 @@ protected:
 		// blade being withdrawn and lands on every real entry on the way, each
 		// landing a font reload and a font.wav.
 		//
-		// Deliberately gated on new_scan: a pin-edge FindBladeAgain and a manual
-		// scanid both arrive with last_scan_id_ unchanged, fall through, and get
-		// the true reading -- so identity resolves the instant the blade seats,
-		// and scanid still works for tuning. The hold below is skipped entirely in
-		// this mode; it debounces a decision the scan is no longer making.
+		// ⚠️ THE PIN IS THE AUTHORITY, SO THE PIN IS WHAT THIS WATCHES. An earlier
+		// version inferred "this is a scan call" from last_scan_id_ alone, which
+		// is a clock, and a clock is exactly what shifts once the board has been
+		// idle and the blade loop is cycling its own branch. If a scan landed
+		// between the pin latching and Fett263's FindBladeAgain reaching here, the
+		// insert was handed current_config->ohm, the OS re-picked what it already
+		// had, and the event was swallowed outright -- the saber only noticed the
+		// blade much later. A fast out-and-in worked; one after a rest did not.
+		//
+		// blade_detected_ changing is the unambiguous signal and needs no timing:
+		// let the real reading through on any pin transition, always. Suppression
+		// then applies only while the pin is STEADY, which is the single case it
+		// was ever meant for -- the periodic scan walking the resistance sweep and
+		// landing on blade entries nobody asked it to select.
+		//
+		// A non-scan call still falls through too, so a manual scanid re-identifies
+		// normally. The hold below is skipped in this mode; it debounces a decision
+		// the scan is no longer making.
 		#ifdef JMT_OWNS_PIN_DETECT
-			if (new_scan && current_config) return current_config->ohm;
+			const bool pin_changed = (blade_detected_ != last_pin_state_);
+			last_pin_state_ = blade_detected_;
+			if (new_scan && !pin_changed && current_config) return current_config->ohm;
 		#endif
 
 		// Config-selection hold: a noisy open-circuit reading can dive past the
@@ -1323,6 +1338,12 @@ protected:
 
 	uint8_t config_hold_count_ = 0;
 	uint32_t last_counted_scan_ = 0;
+#ifdef JMT_OWNS_PIN_DETECT
+	// Mirrors PropBase::blade_detected_ so a pin transition can be recognised
+	// without reference to any timer. Starts false, matching the pin's own
+	// initial state, so a blade already seated at boot still reads as a change.
+	bool last_pin_state_ = false;
+#endif
 
 #ifdef JMT_CHASSIS_DETECT_RANGE
 	static inline bool IsInChassisOutRange(float raw) {
