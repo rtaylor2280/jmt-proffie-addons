@@ -357,7 +357,18 @@ void Loop() override {
 		#endif
 	#endif
 
-	#ifdef JMT_BLADE_DETECT
+	// Only when there is no detect pin. With a pin, Fett263's latch handler
+	// already owns gesture state and calls SaveGestureState/RestoreGestureState
+	// on the edge; running this as well gives two writers for one variable.
+	// Under FETT263_SAVE_GESTURE_OFF that is not merely redundant, it is
+	// destructive: the second SaveGestureState captures a gestureon that the
+	// first handler has already cleared, so the saved preference becomes "off"
+	// and every later insert restores gestures to off. The saber stops waking
+	// on blade insert.
+	//   Beside a pin, JMT_BLADE_DETECT means only "keep the periodic scan from
+	// choosing blade configs" (see JMT_OWNS_PIN_DETECT). It does not mean "also
+	// run the BladeID gesture machine".
+	#if defined(JMT_BLADE_DETECT) && !defined(BLADE_DETECT_PIN)
 		#ifdef CHARGE_DETECT_PIN
 			if (!charging_active_) {
 				HandleJmtBladeDetect();

@@ -1,5 +1,5 @@
 {
-  "version": "1.2.0",
+  "version": "1.2.1",
   "minProffieVersion": "7.14",
   "minStudioVersion": null,
   "testedUpTo": "8.10",
@@ -14,7 +14,7 @@
     },
     {
       "path": "props/jmt_fett263_wrapper.h",
-      "sha256": "614e339dee53a31f20db5dcc32bb47b90f111f292280ca22642b0a77a1a2c4bf"
+      "sha256": "df35467c2e3810da2e2c99d2389752b4297972ef7158cffab0bb5dd1d03fe105"
     },
     {
       "path": "styles/pixel_relay.h",
@@ -22,6 +22,11 @@
     }
   ],
   "changelog": [
+    {
+      "version": "1.2.1",
+      "date": "2026-10-10",
+      "notes": "Fix: saber stops waking on blade insert when JMT_BLADE_DETECT is used with a detect pin\n- Only affects the combination introduced in 1.2.0. A detect pin on its own, or JMT_BLADE_DETECT without a pin, was never affected\n- With both defined, two handlers were managing gesture state: Fett263's blade detect latch, and the wrapper's own BladeID-driven one. Under FETT263_SAVE_GESTURE_OFF the second save captured a gestureon the first had already cleared, so the saved preference became off and every later insert restored gestures to off\n- With a detect pin the wrapper no longer runs its own gesture handling. The pin handler already does it on the contact edge, which is earlier and more reliable. Beside a pin, JMT_BLADE_DETECT now means only what it was added to mean in 1.2.0: keep the periodic BladeID scan from choosing blade configs"
+    },
     {
       "version": "1.2.0",
       "date": "2026-10-10",
