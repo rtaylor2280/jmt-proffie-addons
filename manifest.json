@@ -1,5 +1,5 @@
 {
-  "version": "1.1.2",
+  "version": "1.2.0",
   "minProffieVersion": "7.14",
   "minStudioVersion": null,
   "testedUpTo": "8.10",
@@ -14,7 +14,7 @@
     },
     {
       "path": "props/jmt_fett263_wrapper.h",
-      "sha256": "8b6fdf9dd769639945989d989b8ac0fd91b30756f168da0fb7c613daa39c51a8"
+      "sha256": "614e339dee53a31f20db5dcc32bb47b90f111f292280ca22642b0a77a1a2c4bf"
     },
     {
       "path": "styles/pixel_relay.h",
@@ -22,6 +22,11 @@
     }
   ],
   "changelog": [
+    {
+      "version": "1.2.0",
+      "date": "2026-10-10",
+      "notes": "Blade detect pin and BladeID scanning now work together\n- Fixes a stutter on blade removal: several font reloads and a repeated font.wav instead of a single bladeout.wav. It affects sabers that have a detect pin, more than one blade entry in their blades array, and something running a periodic BladeID scan\n- Cause: as a blade is withdrawn its resistance climbs through every value between seated and open, and the periodic scan samples that sweep and selects whichever blade entry is numerically nearest each time. A change between two real blade entries reads to ProffieOS as a different blade rather than a removal, so it reloads the font. Sabers with a single blade entry never show it, because the nearest entry never changes\n- With a detect pin the wrapper now leaves blade selection to the pin. The pin fires at the moment the contact makes or breaks, and on removal it has already marked the reading as no-blade, so the correct entry is chosen regardless of what the ID line reads mid-sweep. The periodic scan continues to feed chassis detect and no longer moves the blade config. A manual scanid is unaffected and still re-identifies immediately\n- This is automatic when JMT_CHASSIS_DETECT_RANGE is enabled, since that is the setting that requires a periodic scan to exist\n- JMT_BLADE_DETECT alongside a detect pin is no longer an error. It now requests the same behavior for a pin saber that runs a BladeID scan without chassis detect, and no longer requires NO_BLADE_ID_RANGE, because the pin supplies what the range was supplying\n- A detect pin on its own, with no chassis range and no JMT_BLADE_DETECT, is untouched and behaves exactly as before\n- Blade insert wake, gesture restore and the favorite-reset abort are unchanged"
+    },
     {
       "version": "1.1.2",
       "date": "2026-10-10",

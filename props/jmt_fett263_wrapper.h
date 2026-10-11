@@ -49,18 +49,16 @@
 #error "JMT_PITCH_OFFSET / JMT_ROLL_OFFSET require ORIENTATION_ROTATION to be defined"
 #endif
 
-// JMT_BLADE_DETECT: blade presence derived from the BladeID scan, for configs
-// that have no physical blade detect pin. It is not a second detect system --
-// it stands in for the gesture-state block Fett263 only compiles when
-// BLADE_DETECT_PIN is defined. A pin config already has that behavior natively
-// and gains nothing from this define, so enabling both is redundant rather than
-// additive. With FETT263_SAVE_GESTURE_OFF it is actively harmful: both handlers
-// call SaveGestureState(), which writes gesture.ini to SD, and the second write
-// captures the already-cleared gestureon -- overwriting the user's real
-// preference so gestures stay off after the next insert.
-#if defined(BLADE_DETECT_PIN) && defined(JMT_BLADE_DETECT)
-  #error "BLADE_DETECT_PIN already provides blade detect natively -- JMT_BLADE_DETECT is only for configs that detect the blade via BladeID instead. Remove JMT_BLADE_DETECT."
-#endif
+// JMT_BLADE_DETECT: where blade presence comes from.
+//   Without a detect pin, it is derived from the BladeID scan -- the OS 8
+// NO_BLADE_ID_RANGE mechanism is what makes a pinless detect possible, and this
+// stands in for the gesture-state block Fett263 only compiles when
+// BLADE_DETECT_PIN is defined.
+//   WITH a detect pin it means something different and useful: keep Fett263's
+// pin handling, which is immediate and correct, and stop the periodic BladeID
+// scan from choosing blade configs behind it. See JMT_OWNS_PIN_DETECT below.
+// This is implied automatically by JMT_CHASSIS_DETECT_RANGE, which is the
+// configuration that forces a periodic scan to exist in the first place.
 
 // Internal umbrella: defined when EITHER blade detect method is configured --
 // the physical pin or the BladeID-driven JMT path. Downstream consumers gate on
@@ -68,6 +66,31 @@
 // JMT_HAS_CHASSIS_DETECT below.
 #if defined(BLADE_DETECT_PIN) || defined(JMT_BLADE_DETECT)
 #define JMT_HAS_BLADE_DETECT
+#endif
+
+// Internal umbrella: the wrapper takes responsibility for blade config
+// selection because a detect pin is present AND something is running a periodic
+// BladeID scan.
+//
+// A detect pin alone is fine and is left completely untouched -- Fett263's latch
+// handler fires at the physical moment, and on removal the pin has already added
+// NO_BLADE to the reading, so FindBladeAgain lands on the no-blade entry no
+// matter what the ID line happens to read mid-sweep.
+//
+// What breaks is the periodic scan running ALONGSIDE the pin. As a blade is
+// withdrawn its resistance climbs through every value between seated and open --
+// 10k, 80k, 300k -- and the scan samples that sweep every BLADE_ID_SCAN_MILLIS,
+// selecting whichever BladeConfig is numerically nearest each time. With more
+// than one real blade entry the sweep lands on them, and the OS classifies a
+// change between two real entries as "different blade, still present", which
+// reloads the font and plays font.wav instead of bladeout.wav. Repeated across a
+// couple of seconds of contact sweep it stutters.
+//
+// A config with only one real entry plus NO_BLADE never shows it, because the
+// nearest entry below the sentinel never changes. That is why this surfaced on a
+// multi-blade saber and not on the others.
+#if defined(BLADE_DETECT_PIN) && (defined(JMT_CHASSIS_DETECT_RANGE) || defined(JMT_BLADE_DETECT))
+#define JMT_OWNS_PIN_DETECT
 #endif
 
 // JMT_SWING_ON_BLOCK: swallow the swing-on ignition gesture while no blade is
@@ -114,8 +137,12 @@
 // wrapper's back-port and satisfies this instead.
 //   Without one of them the feature compiles, runs, and silently never fires,
 // which is the failure this check exists to prevent.
-#if defined(JMT_BLADE_DETECT) && !defined(NO_BLADE_ID_RANGE) && !defined(JMT_NO_BLADE_VALUE)
-#error "JMT_BLADE_DETECT needs a way for the BladeID reading to resolve to NO_BLADE, or the blade is never seen as removed. On ProffieOS 8.0+ define NO_BLADE_ID_RANGE <min>,<max> around your blade-out reading. On 7.x define JMT_NO_BLADE_VALUE instead."
+//   Not required when a detect pin is present: prop_base's id() adds NO_BLADE
+// itself whenever the pin reports no blade, which is the same step the range
+// macro performs, sourced from hardware instead of from a window. A pin config
+// should NOT define the range -- see the double-add check further down.
+#if defined(JMT_BLADE_DETECT) && !defined(BLADE_DETECT_PIN) && !defined(NO_BLADE_ID_RANGE) && !defined(JMT_NO_BLADE_VALUE)
+#error "JMT_BLADE_DETECT without a detect pin needs a way for the BladeID reading to resolve to NO_BLADE, or the blade is never seen as removed. On ProffieOS 8.0+ define NO_BLADE_ID_RANGE <min>,<max> around your blade-out reading. On 7.x define JMT_NO_BLADE_VALUE instead."
 #endif
 
 // JMT_CHASSIS_DETECT_RANGE: chassis detection driven by the BladeID resistance
@@ -1118,6 +1145,12 @@ protected:
 #endif  // JMT_BLADE_DETECT
 
 // ---------- Helpers: JMT chassis-detect-range backend ---------
+// The id() override below serves two features and compiles for either: the
+// chassis range needs a hook on every BladeID scan, and JMT_OWNS_PIN_DETECT
+// needs to keep those same scans from moving the blade config. Chassis-only
+// parts are guarded individually so a pin config without the range still gets
+// the override.
+#if defined(JMT_CHASSIS_DETECT_RANGE) || defined(JMT_OWNS_PIN_DETECT)
 #ifdef JMT_CHASSIS_DETECT_RANGE
 	// Consecutive-scan debounce for the range backend. The pin path gets a
 	// 30 ms debounce; a raw BladeID read gets none, so a single noisy scan
@@ -1130,6 +1163,7 @@ protected:
 	#ifndef JMT_CHASSIS_RANGE_STABLE_COUNT
 	#define JMT_CHASSIS_RANGE_STABLE_COUNT 3
 	#endif
+#endif  // JMT_CHASSIS_DETECT_RANGE (chassis-only tunable)
 
 	// Consecutive-scan hold for the OS BladeID config selection (blade vs
 	// no-blade vs which blade). A noisy open-circuit reading diving past the
@@ -1158,8 +1192,10 @@ protected:
 		if (g_charging && current_config) return current_config->ohm;
 
 		float val = SaberFett263Buttons::id(announce);
+	#ifdef JMT_CHASSIS_DETECT_RANGE
 		float raw = (val >= NO_BLADE) ? val - NO_BLADE : val;
 		bool out_now = IsInChassisOutRange(raw);
+	#endif
 
 		// Both counters below debounce SCANS, but id() is called more than once
 		// per scan and every call used to advance them. ScanBladeIdNow() calls
@@ -1181,6 +1217,7 @@ protected:
 		bool new_scan = (last_scan_id_ != last_counted_scan_);
 		if (new_scan) last_counted_scan_ = last_scan_id_;
 
+
 		// Integrator debounce: whenever the instantaneous verdict agrees with
 		// the committed state, clear the counter; otherwise count agreeing
 		// contrary scans and flip the committed state only once the threshold
@@ -1193,6 +1230,7 @@ protected:
 		// few scans later becomes a transition and plays chassisout.wav at boot.
 		// One scan is enough to seed because a scan is already the average of
 		// BLADE_ID_TIMES samples; the debounce still governs every later change.
+	#ifdef JMT_CHASSIS_DETECT_RANGE
 		if (new_scan) {
 			if (!chassis_range_seeded_) {
 				chassis_range_out_ = out_now;
@@ -1204,6 +1242,29 @@ protected:
 				chassis_range_stable_count_ = 0;
 			}
 		}
+	#endif
+
+		// With a detect pin, blade selection belongs to the pin edge, not to the
+		// scan. Fett263's latch handler calls FindBladeAgain() at the moment the
+		// contact makes or breaks, which is both immediate and unambiguous: on
+		// removal the pin has already pushed the reading past NO_BLADE, so the
+		// no-blade entry is chosen whatever the ID line reads mid-sweep.
+		//
+		// The periodic scan is here only to feed the chassis range -- which it has
+		// now done, above. Returning the current config's own ohm from here makes
+		// it config-neutral: FindBestConfig re-selects what is already loaded and
+		// nothing reloads. Without this the scan walks the resistance sweep of a
+		// blade being withdrawn and lands on every real entry on the way, each
+		// landing a font reload and a font.wav.
+		//
+		// Deliberately gated on new_scan: a pin-edge FindBladeAgain and a manual
+		// scanid both arrive with last_scan_id_ unchanged, fall through, and get
+		// the true reading -- so identity resolves the instant the blade seats,
+		// and scanid still works for tuning. The hold below is skipped entirely in
+		// this mode; it debounces a decision the scan is no longer making.
+		#ifdef JMT_OWNS_PIN_DETECT
+			if (new_scan && current_config) return current_config->ohm;
+		#endif
 
 		// Config-selection hold: a noisy open-circuit reading can dive past the
 		// no-blade floor for a scan or two, making the OS re-pick a BladeConfig
@@ -1228,7 +1289,7 @@ protected:
 			}
 		}
 
-		#ifdef JMT_DEBUG_CHASSIS_RANGE
+		#if defined(JMT_DEBUG_CHASSIS_RANGE) && defined(JMT_CHASSIS_DETECT_RANGE)
 			Serial.print("CHASSIS raw:");
 			Serial.print(raw);
 			Serial.print("  out_now:");
@@ -1249,6 +1310,10 @@ protected:
 		return val;
 	}
 
+	uint8_t config_hold_count_ = 0;
+	uint32_t last_counted_scan_ = 0;
+
+#ifdef JMT_CHASSIS_DETECT_RANGE
 	static inline bool IsInChassisOutRange(float raw) {
 		constexpr int range_vals[] = {JMT_CHASSIS_DETECT_RANGE};
 		return raw >= range_vals[0] && raw <= range_vals[1];
@@ -1257,8 +1322,6 @@ protected:
 	bool chassis_range_out_ = false;
 	bool chassis_range_seeded_ = false;
 	uint8_t chassis_range_stable_count_ = 0;
-	uint8_t config_hold_count_ = 0;
-	uint32_t last_counted_scan_ = 0;
 
 	// Called once per Loop(). Pushes the DEBOUNCED chassis-range read into the
 	// shared UpdateChassisState machine, which handles transition detection,
@@ -1273,7 +1336,8 @@ protected:
 		if (!chassis_range_seeded_) return;
 		UpdateChassisState(!chassis_range_out_);
 	}
-#endif  // JMT_CHASSIS_DETECT_RANGE
+#endif  // JMT_CHASSIS_DETECT_RANGE (chassis-only members and reporter)
+#endif  // JMT_CHASSIS_DETECT_RANGE || JMT_OWNS_PIN_DETECT
 
 // ---------- Favorites Helpers --------------------
 #ifndef JMT_DISABLE_FAVORITES
