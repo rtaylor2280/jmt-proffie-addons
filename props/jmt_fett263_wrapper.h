@@ -1246,7 +1246,6 @@ protected:
 #ifdef FETT263_MANUAL_BLADE_ARRAY
 	// True when a blades[] entry is a no-blade entry rather than a real blade.
 	bool JmtBladeEntryIsNoBlade(size_t index) const {
-		extern BladeConfig blades[];
 		if (blades[index].ohm >= NO_BLADE) return true;
 	#ifdef JMT_NO_BLADE_VALUE
 		if (blades[index].ohm == JMT_NO_BLADE_VALUE) return true;
@@ -1262,7 +1261,6 @@ protected:
 	// never calls PropBase::id() -- which is where a detect pin adds NO_BLADE.
 	// So a hand-picked no-blade array also switches blade detect off.
 	bool JmtNextBladeArray() {
-		extern BladeConfig blades[];
 	#ifdef JMT_HAS_BLADE_DETECT
 		// With blade detect configured, refuse while no blade is present.
 		// Faking a real array here reports a blade that is not installed and
