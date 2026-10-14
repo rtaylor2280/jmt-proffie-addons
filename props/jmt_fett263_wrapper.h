@@ -472,6 +472,29 @@ bool Event2(enum BUTTON button, EVENT event, uint32_t modifiers) override {
 		}
 	#endif
 	
+	#ifdef JMT_NO_CHORD
+		// POWER+CLASH while off opens the volume menu unless the tip is below
+		// 45 degrees. Falling through on the tip-down case leaves Fett263's
+		// two-button handler to toggle gestures.
+		//
+		// Fett263 compiles these as separate behaviours: the one-button branch
+		// angle-splits this event between volume and gestures, the two-button
+		// branch spends it entirely on gestures and puts volume on POWER+AUX.
+		// This restores the one-button split on a two-button build.
+		if (EVENTID(button, event, modifiers) ==
+			EVENTID(BUTTON_NONE, EVENT_CLASH, MODE_OFF | BUTTON_POWER)) {
+			if (fusor.angle1() >= - M_PI / 4) {
+				StartMenu(MENU_VOLUME);
+				if (SFX_vmbegin) {
+					sound_library_.SayEnterVolumeMenu();
+				} else {
+					sound_library_.SayEditVolume();
+				}
+				return true;
+			}
+		}
+	#endif
+
 	// Let Fett handle everything else normally
 	bool ret = SaberFett263Buttons::Event2(button, event, modifiers);
 
