@@ -544,7 +544,11 @@ bool Event2(enum BUTTON button, EVENT event, uint32_t modifiers) override {
 			// target exists.
 		#if defined(FETT263_MANUAL_BLADE_ARRAY) || !defined(FETT263_DISABLE_COPY_PRESET)
 			if (jmt_id == EVENTID(BUTTON_POWER, EVENT_FOURTH_HELD_LONG, MODE_OFF)) {
+			#ifdef FETT263_MANUAL_BLADE_ARRAY
+				return JmtNextBladeArray();
+			#else
 				return SaberFett263Buttons::Event2(BUTTON_AUX, EVENT_CLICK_LONG, MODE_OFF | BUTTON_POWER);
+			#endif
 			}
 		#endif
 
@@ -596,6 +600,16 @@ bool Event2(enum BUTTON button, EVENT event, uint32_t modifiers) override {
 			EVENTID(BUTTON_POWER, EVENT_THIRD_CLICK_LONG, MODE_OFF)) {
 			SaberBase::DoEffect(EFFECT_BATTERY_LEVEL, 0);
 			return true;
+		}
+	#endif
+
+	#ifdef FETT263_MANUAL_BLADE_ARRAY
+		// The native chord, so the skip and the no-blade refusal apply on a
+		// two-button hilt as well. Copy Preset cannot also be on this chord --
+		// Fett263 disables it whenever FETT263_MANUAL_BLADE_ARRAY is defined.
+		if (EVENTID(button, event, modifiers) ==
+			EVENTID(BUTTON_AUX, EVENT_CLICK_LONG, MODE_OFF | BUTTON_POWER)) {
+			return JmtNextBladeArray();
 		}
 	#endif
 
@@ -1226,6 +1240,53 @@ protected:
 		if (current_config->ohm == JMT_NO_BLADE_VALUE) return true;
 #endif
 		return false;
+	}
+#endif
+
+#ifdef FETT263_MANUAL_BLADE_ARRAY
+	// True when a blades[] entry is a no-blade entry rather than a real blade.
+	bool JmtBladeEntryIsNoBlade(size_t index) const {
+		extern BladeConfig blades[];
+		if (blades[index].ohm >= NO_BLADE) return true;
+	#ifdef JMT_NO_BLADE_VALUE
+		if (blades[index].ohm == JMT_NO_BLADE_VALUE) return true;
+	#endif
+		return false;
+	}
+
+	// Cycle to the next blade array, skipping no-blade entries.
+	//
+	// Fett263's NextBladeArray() steps by one through blades[] with no filter,
+	// so a no-blade entry is a stop on the cycle. Selecting it by hand sets
+	// use_fake_id_, and while that is set Fett263's id() returns the fake and
+	// never calls PropBase::id() -- which is where a detect pin adds NO_BLADE.
+	// So a hand-picked no-blade array also switches blade detect off.
+	bool JmtNextBladeArray() {
+		extern BladeConfig blades[];
+	#ifdef JMT_HAS_BLADE_DETECT
+		// With blade detect configured, refuse while no blade is present.
+		// Faking a real array here reports a blade that is not installed and
+		// leaves gestures live with nothing to ignite.
+		if (CurrentBladeConfigIsNoBlade()) {
+			sound_library_.SayCancel();
+			return true;
+		}
+	#endif
+		const size_t count = NELEM(blades);
+		const size_t cur = current_config - blades;
+		size_t next = cur;
+		for (size_t i = 0; i < count; i++) {
+			next = (next + 1) % count;
+			if (!JmtBladeEntryIsNoBlade(next)) break;
+		}
+		if (next == cur) return true;
+
+		if (!use_fake_id_) best_config_before_faking_ = cur;
+		fake_id_ = blades[next].ohm;
+		use_fake_id_ = true;
+		FindBladeAgain();
+		PlayArraySound();
+		return true;
 	}
 #endif
 
