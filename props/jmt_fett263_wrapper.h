@@ -473,6 +473,43 @@ bool Event2(enum BUTTON button, EVENT event, uint32_t modifiers) override {
 	#endif
 	
 	#ifdef JMT_NO_CHORD
+		// Defer the POWER click so multi-click sequences can form.
+		//
+		// button_base.h sends a click immediately and only queues a saved copy
+		// (BUTTON_DOUBLE_CLICK_TIMEOUT later) if the prop declines the first
+		// one. Fett263's one-button branch declines and acts on the saved
+		// event, which is what lets a second or third press mean something.
+		// The two-button branch claims the immediate event, so the first press
+		// commits and no sequence can form.
+		//
+		// Declining here and replaying the saved event into Fett263 moves only
+		// WHEN the prop is told. Its own handlers still run, so menus, colour
+		// change and choreography behave exactly as they do now.
+		//
+		// PropBase::Event calls Event2 twice -- once with the live modifiers,
+		// once with MODE_ANY_BUTTON -- and saves the click only if both decline,
+		// so each decline is matched in both forms. MODE_OFF is 0, so it cannot
+		// be tested as a mask.
+		{
+			const uint32_t jmt_id = EVENTID(button, event, modifiers);
+
+			if (jmt_id == EVENTID(BUTTON_POWER, EVENT_CLICK_SHORT, MODE_OFF) ||
+				jmt_id == EVENTID(BUTTON_POWER, EVENT_CLICK_SHORT, MODE_ANY_BUTTON)) {
+				return false;
+			}
+			if (jmt_id == EVENTID(BUTTON_POWER, EVENT_FIRST_CLICK_SHORT, MODE_ON) ||
+				jmt_id == EVENTID(BUTTON_POWER, EVENT_FIRST_CLICK_SHORT, MODE_ANY_BUTTON | MODE_ON)) {
+				return false;
+			}
+
+			if (jmt_id == EVENTID(BUTTON_POWER, EVENT_FIRST_SAVED_CLICK_SHORT, MODE_OFF)) {
+				return SaberFett263Buttons::Event2(BUTTON_POWER, EVENT_CLICK_SHORT, modifiers);
+			}
+			if (jmt_id == EVENTID(BUTTON_POWER, EVENT_FIRST_SAVED_CLICK_SHORT, MODE_ON)) {
+				return SaberFett263Buttons::Event2(BUTTON_POWER, EVENT_FIRST_CLICK_SHORT, modifiers);
+			}
+		}
+
 		// POWER+CLASH while off opens the volume menu unless the tip is below
 		// 45 degrees. Falling through on the tip-down case leaves Fett263's
 		// two-button handler to toggle gestures.
