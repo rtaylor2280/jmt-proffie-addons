@@ -524,6 +524,40 @@ bool Event2(enum BUTTON button, EVENT event, uint32_t modifiers) override {
 				SaberBase::Lockup() == SaberBase::LOCKUP_LIGHTNING_BLOCK) {
 				return SaberFett263Buttons::Event2(BUTTON_AUX, EVENT_RELEASED, MODE_ANY_BUTTON | MODE_ON);
 			}
+
+			// The remaining two-button chords, each claimed on the event
+			// Fett263's one-button branch uses and replayed as the chord its
+			// two-button branch handles. Every slot below is unused on a
+			// two-button build, so nothing is displaced.
+			//
+			// Where two chords share one event (blade array vs copy preset,
+			// BladeID vs change font) the active one is whichever the config
+			// compiles, exactly as on a one-button build.
+
+			// Edit Mode
+			if (jmt_id == EVENTID(BUTTON_POWER, EVENT_SECOND_HELD_LONG, MODE_OFF)) {
+				return SaberFett263Buttons::Event2(BUTTON_AUX, EVENT_HELD_LONG, MODE_OFF | BUTTON_POWER);
+			}
+
+			// Next blade array, or copy preset
+			if (jmt_id == EVENTID(BUTTON_POWER, EVENT_FOURTH_HELD_LONG, MODE_OFF)) {
+				return SaberFett263Buttons::Event2(BUTTON_AUX, EVENT_CLICK_LONG, MODE_OFF | BUTTON_POWER);
+			}
+
+			// Trigger BladeID, or change font
+			if (jmt_id == EVENTID(BUTTON_POWER, EVENT_FOURTH_CLICK_LONG, MODE_OFF)) {
+				return SaberFett263Buttons::Event2(BUTTON_POWER, EVENT_CLICK_LONG, MODE_OFF | BUTTON_AUX);
+			}
+
+			// Change style number, while ignited
+			if (jmt_id == EVENTID(BUTTON_POWER, EVENT_FOURTH_CLICK_LONG, MODE_ON)) {
+				return SaberFett263Buttons::Event2(BUTTON_POWER, EVENT_CLICK_LONG, MODE_ON | BUTTON_AUX);
+			}
+
+			// Power save, while ignited
+			if (jmt_id == EVENTID(BUTTON_POWER, EVENT_FOURTH_CLICK_SHORT, MODE_ON)) {
+				return SaberFett263Buttons::Event2(BUTTON_POWER, EVENT_CLICK_SHORT, MODE_ON | BUTTON_AUX);
+			}
 		}
 
 		// POWER+CLASH while off opens the volume menu unless the tip is below
