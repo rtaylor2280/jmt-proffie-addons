@@ -508,6 +508,22 @@ bool Event2(enum BUTTON button, EVENT event, uint32_t modifiers) override {
 			if (jmt_id == EVENTID(BUTTON_POWER, EVENT_FIRST_SAVED_CLICK_SHORT, MODE_ON)) {
 				return SaberFett263Buttons::Event2(BUTTON_POWER, EVENT_FIRST_CLICK_SHORT, modifiers);
 			}
+
+			// Lightning block on a click then press-and-hold of POWER while
+			// ignited, replayed as the two-button chord. Fett263's own handler
+			// runs, clearing the blast state the wrapper cannot reach.
+			if (jmt_id == EVENTID(BUTTON_POWER, EVENT_SECOND_HELD, MODE_ON)) {
+				return SaberFett263Buttons::Event2(BUTTON_AUX, EVENT_CLICK_SHORT, MODE_ON | BUTTON_POWER);
+			}
+
+			// That lockup ends on an AUX release, which this hilt cannot send.
+			// Releasing POWER replays it, and only while a lightning block is
+			// the active lockup so a clash lockup is left alone.
+			if ((jmt_id == EVENTID(BUTTON_POWER, EVENT_SECOND_RELEASED, MODE_ON) ||
+				 jmt_id == EVENTID(BUTTON_POWER, EVENT_SECOND_RELEASED, MODE_ANY_BUTTON | MODE_ON)) &&
+				SaberBase::Lockup() == SaberBase::LOCKUP_LIGHTNING_BLOCK) {
+				return SaberFett263Buttons::Event2(BUTTON_AUX, EVENT_RELEASED, MODE_ANY_BUTTON | MODE_ON);
+			}
 		}
 
 		// POWER+CLASH while off opens the volume menu unless the tip is below
