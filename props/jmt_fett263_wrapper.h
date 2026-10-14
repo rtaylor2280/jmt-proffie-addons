@@ -493,6 +493,15 @@ bool Event2(enum BUTTON button, EVENT event, uint32_t modifiers) override {
 				return true;
 			}
 		}
+
+		// Battery level on a triple click and hold of POWER while off. The
+		// two-button branch puts this on POWER + AUX; the event used here is
+		// unused outside Fett263's one-button branch, so nothing is displaced.
+		if (EVENTID(button, event, modifiers) ==
+			EVENTID(BUTTON_POWER, EVENT_THIRD_CLICK_LONG, MODE_OFF)) {
+			SaberBase::DoEffect(EFFECT_BATTERY_LEVEL, 0);
+			return true;
+		}
 	#endif
 
 	// Let Fett handle everything else normally
