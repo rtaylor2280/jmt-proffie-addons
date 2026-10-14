@@ -539,20 +539,28 @@ bool Event2(enum BUTTON button, EVENT event, uint32_t modifiers) override {
 				return SaberFett263Buttons::Event2(BUTTON_AUX, EVENT_HELD_LONG, MODE_OFF | BUTTON_POWER);
 			}
 
-			// Next blade array, or copy preset
+			// Next blade array, or copy preset. The two share one chord in
+			// Fett263 and carry different guards, so this compiles if either
+			// target exists.
+		#if defined(FETT263_MANUAL_BLADE_ARRAY) || !defined(FETT263_DISABLE_COPY_PRESET)
 			if (jmt_id == EVENTID(BUTTON_POWER, EVENT_FOURTH_HELD_LONG, MODE_OFF)) {
 				return SaberFett263Buttons::Event2(BUTTON_AUX, EVENT_CLICK_LONG, MODE_OFF | BUTTON_POWER);
 			}
+		#endif
 
-			// Trigger BladeID, or change font
+			// Trigger BladeID, or change font. Same shared chord, same rule.
+		#if defined(FETT263_MANUAL_BLADE_ID) || !defined(FETT263_DISABLE_CHANGE_FONT)
 			if (jmt_id == EVENTID(BUTTON_POWER, EVENT_FOURTH_CLICK_LONG, MODE_OFF)) {
 				return SaberFett263Buttons::Event2(BUTTON_POWER, EVENT_CLICK_LONG, MODE_OFF | BUTTON_AUX);
 			}
+		#endif
 
 			// Change style number, while ignited
+		#ifndef FETT263_DISABLE_CHANGE_STYLE
 			if (jmt_id == EVENTID(BUTTON_POWER, EVENT_FOURTH_CLICK_LONG, MODE_ON)) {
 				return SaberFett263Buttons::Event2(BUTTON_POWER, EVENT_CLICK_LONG, MODE_ON | BUTTON_AUX);
 			}
+		#endif
 
 			// Power save, while ignited
 			if (jmt_id == EVENTID(BUTTON_POWER, EVENT_FOURTH_CLICK_SHORT, MODE_ON)) {
