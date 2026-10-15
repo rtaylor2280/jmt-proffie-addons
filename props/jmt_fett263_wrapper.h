@@ -49,6 +49,15 @@
 #error "JMT_PITCH_OFFSET / JMT_ROLL_OFFSET require ORIENTATION_ROTATION to be defined"
 #endif
 
+// JMT_NO_CHORD replays Fett263's two-button handlers, which only exist when
+// NUM_BUTTONS is 2 or more. On a one-button build the deferred POWER click is
+// replayed as EVENT_CLICK_SHORT, and that branch has no handler for it, so
+// ignition stops working. The one-button scheme already provides every control
+// this restores.
+#if defined(JMT_NO_CHORD) && NUM_BUTTONS < 2
+#error "JMT_NO_CHORD is for two-button configs. A one-button build already has these controls, and enabling this would break ignition."
+#endif
+
 // JMT_BLADE_DETECT: where blade presence comes from.
 //   Without a detect pin, it is derived from the BladeID scan -- the OS 8
 // NO_BLADE_ID_RANGE mechanism is what makes a pinless detect possible, and this
