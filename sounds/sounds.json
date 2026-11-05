@@ -1,0 +1,42 @@
+{
+  "sounds": [
+    {
+      "file": "chargebegin.wav",
+      "sha256": "ccc65baf5b1eca25a086745cccc35fc4d86028ed375206fab760aacc232e9c98",
+      "bytes": 455938,
+      "what": "Plays when the saber is plugged in to charge",
+      "needs": [
+        "CHARGE_DETECT_PIN"
+      ]
+    },
+    {
+      "file": "chargecomplete.wav",
+      "sha256": "148999da04fa588bd11dd73d5881ef368a3f5461c0fea2889508dbe871d846fc",
+      "bytes": 110670,
+      "what": "Plays once when the battery reaches full",
+      "needs": [
+        "JMT_CHARGE_COMPLETE_ANNOUNCE"
+      ]
+    },
+    {
+      "file": "chassisin.wav",
+      "sha256": "c4dd22c4139aa8fa005a4af8dd4aba7fd2ae17abc5662c3a434d5842a06d3770",
+      "bytes": 83266,
+      "what": "Plays when the chassis goes in",
+      "needs": [
+        "CHASSIS_DETECT_PIN",
+        "JMT_CHASSIS_DETECT_RANGE"
+      ]
+    },
+    {
+      "file": "chassisout.wav",
+      "sha256": "7ba75c6ded7ca893b17597238b8932282befb15580cb25b54b53c5aa4619d71f",
+      "bytes": 54792,
+      "what": "Plays when the chassis comes out",
+      "needs": [
+        "CHASSIS_DETECT_PIN",
+        "JMT_CHASSIS_DETECT_RANGE"
+      ]
+    }
+  ]
+}
